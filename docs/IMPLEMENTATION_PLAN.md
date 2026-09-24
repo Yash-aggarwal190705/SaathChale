@@ -17,37 +17,39 @@
 
 ---
 
-## Phase 0 — Foundation & Project Config
+## Phase 0 — Foundation & Project Config ✅
 
 **Goal:** real app shell (routing, env, PWA tooling) around the existing screens.
 
-- [ ] 0.1 Rename package: update `package.json` name to `saathchalo-web`; update `index.html` title/meta to SaathChalo.
-- [ ] 0.2 Install deps: `react-router-dom`, `firebase`, `leaflet`, `react-leaflet`, `@types/leaflet`, `zustand`, `vite-plugin-pwa`.
-- [ ] 0.3 Create `src/lib/firebase.ts` (initializeApp with env-based config: Auth, Firestore, RTDB, Storage, Messaging).
-- [ ] 0.4 Create `.env.example` with Firebase web config keys + Vite env typing in `src/vite-env.d.ts`.
-- [ ] 0.5 Add route structure with React Router: `/` (app shell), `/onboarding/*`, `/share/:token` (public trip view), auth-guarded app area.
-- [ ] 0.6 Add auth-state context/provider (`src/context/AuthContext.tsx`) wrapping current `role`/`appSection` state so existing flows keep working during migration.
-- [ ] 0.7 Replace manual `public/sw.js` + `public/manifest.webmanifest` with `vite-plugin-pwa` config (generate manifest icons in multiple sizes).
-- [ ] 0.8 Verify build (`pnpm build`) and dev preview still show the prototype unchanged.
+- [x] 0.1 Rename package: update `package.json` name to `saathchalo-web`; update `index.html` title/meta to SaathChalo.
+- [x] 0.2 Install deps: `react-router-dom`, `firebase`, `leaflet`, `react-leaflet`, `@types/leaflet`, `zustand`, `vite-plugin-pwa`.
+- [x] 0.3 Create `src/lib/firebase.ts` (initializeApp with env-based config: Auth, Firestore, RTDB, Storage, Messaging).
+- [x] 0.4 Create `.env.example` with Firebase web config keys + Vite env typing in `src/vite-env.d.ts`.
+- [x] 0.5 Add route structure with React Router: `/` (app shell), `/onboarding/*`, `/share/:token` (public trip view), auth-guarded app area.
+- [x] 0.6 Add auth-state context/provider (`src/context/AuthContext.tsx`) wrapping current `role`/`appSection` state so existing flows keep working during migration.
+- [x] 0.7 Replace manual `public/sw.js` + `public/manifest.webmanifest` with `vite-plugin-pwa` config (generate manifest icons in multiple sizes).
+- [x] 0.8 Verify build (`pnpm build`) and dev preview still show the prototype unchanged.
 
 **Acceptance:** prototype renders identically; routing + env scaffold in place; no console errors.
 
 ---
 
-## Phase 1 — Authentication & User Data Model
+## Phase 1 — Authentication & User Data Model ✅
 
 **Goal:** real Firebase Auth + Firestore user profiles replace the hardcoded onboarding state.
 
-- [ ] 1.1 Implement email/password sign-up & sign-in in `AuthContext`; expose `user`, `loading`, `signUp`, `signIn`, `signOut`.
-- [ ] 1.2 On first sign-up, create Firestore `users/{uid}` doc: `{ name, email, role: null, verificationStatus: 'none', createdAt }`.
-- [ ] 1.3 Wire `OnboardingFlow` auth screens to real Firebase calls (replace fake email-sent delay with `sendEmailVerification`).
-- [ ] 1.4 After email verified, show Profile Setup screen → update `users/{uid}` with `{ name, phone, collegeId, gender }`.
-- [ ] 1.5 Implement College ID upload → Firebase Storage (`users/{uid}/college-id.jpg`); store download URL in user doc.
-- [ ] 1.6 Role-select screen writes `users/{uid}.role = 'customer' | 'rider'`; redirect to appropriate home.
-- [ ] 1.7 Verification status field (`none | pending | approved | rejected`) drives which screens are accessible.
-- [ ] 1.8 Protect app routes: unauthenticated → `/onboarding/auth`; no role → `/onboarding/choose-role`.
+- [x] 1.1 Implement email/password sign-up & sign-in in `AuthContext`; expose `user`, `loading`, `signUp`, `signIn`, `signOut`. *(Also Google + phone auth.)*
+- [x] 1.2 On first sign-up, create Firestore `users/{uid}` doc: `{ name, email, role: null, verificationStatus: 'none', createdAt }`.
+- [x] 1.3 Wire `OnboardingFlow` auth screens to real Firebase calls (replace fake email-sent delay with `sendEmailVerification`). *(Email-sent screen now polls `checkEmailVerified` every 5s and blocks "I verified" until email is confirmed; verified sign-ins skip the step.)*
+- [x] 1.4 After email verified, show Profile Setup screen → update `users/{uid}` with `{ name, phone, collegeId, gender }`. *(Name, area, photo wired; phone/gender deferred — fields not in Figma design.)*
+- [x] 1.5 Implement College ID upload → Firebase Storage (`users/{uid}/college-id.jpg`); store download URL in user doc. *(CollegeIDScreen now uses a real file picker + `uploadCollegeId`, sets `verificationStatus: 'pending'`.)*
+- [x] 1.6 Role-select screen writes `users/{uid}.role = 'customer' | 'rider'`; redirect to appropriate home. *(Writes `roles[]` array; supports 'both'.)*
+- [x] 1.7 Verification status field (`none | pending | approved | rejected`) drives which screens are accessible. *(Unverified customers blocked from raising tickets → redirected to verify-pending/rejected screen.)*
+- [x] 1.8 Protect app routes: unauthenticated → `/onboarding/auth`; no role → `/onboarding/choose-role`. *(Auth-based routing effect in App.tsx; session restored on reload; sign-out returns to onboarding.)*
 
 **Acceptance:** can sign up, verify email, upload ID, pick role, and land on the correct home screen. Data persists in Firestore.
+
+> **Note:** Phase 1 is code-complete. Live Firebase testing requires a `.env` file with real project keys (see `.env.example`). Without it, the app runs in prototype mode with all guards unlocked.
 
 ---
 

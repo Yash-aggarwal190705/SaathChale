@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useAuth } from './context/AuthContext'
+import { uploadCollegeId, uploadProfilePhoto } from './lib/userService'
 
 export type OnboardingScreen =
   | 'splash-intro' | 'splash-1' | 'splash-2' | 'splash-3'
@@ -585,8 +587,55 @@ function SplashScreen({ slide, onNext, onSkip }: { slide: 1 | 2 | 3; onNext: () 
   )
 }
 
-function AuthScreen({ onContinue }: { onContinue: () => void }) {
+function AuthScreen({ onContinue, onSignedIn }: { onContinue: () => void; onSignedIn: () => void }) {
+  const { signUp, signIn, signInWithGoogle, checkEmailVerified, firebaseReady } = useAuth()
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'signup' | 'signin'>('signup')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!email.includes('@') || password.length < 6) return
+    setBusy(true)
+    setError('')
+    try {
+      if (firebaseReady) {
+        if (mode === 'signup') {
+          await signUp(email, password)
+          onContinue() // → email-sent (new accounts must verify)
+        } else {
+          await signIn(email, password)
+          // Existing verified accounts skip the email-sent step
+          const verified = await checkEmailVerified()
+          if (verified) onSignedIn()
+          else onContinue()
+        }
+      } else {
+        onContinue() // prototype mode
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Authentication failed'
+      setError(msg.replace('Firebase: ', ''))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleGoogle = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      if (firebaseReady) await signInWithGoogle()
+      onSignedIn()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in failed'
+      setError(msg.replace('Firebase: ', ''))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="px-6 flex flex-col h-full">
       <div className="flex-1 flex flex-col justify-center gap-7">
@@ -601,9 +650,15 @@ function AuthScreen({ onContinue }: { onContinue: () => void }) {
         </div>
         <div className="space-y-3">
           <InputField label="College or work email" placeholder="you@college.edu" value={email} onChange={setEmail} type="email" />
-          <PrimaryButton label="Continue with Email" onClick={onContinue} disabled={!email.includes('@')} />
+          <InputField label="Password" placeholder="Min. 6 characters" value={password} onChange={setPassword} type="password" />
+          {error && <p style={{ fontSize: 12, color: '#E11D48', fontWeight: 500 }}>{error}</p>}
+          <PrimaryButton label={busy ? 'Please wait…' : mode === 'signup' ? 'Create Account' : 'Sign In'} onClick={handleSubmit} disabled={!email.includes('@') || password.length < 6 || busy} />
+          <button onClick={() => { setMode(m => m === 'signup' ? 'signin' : 'signup'); setError('') }}
+            style={{ fontSize: 13, color: '#3B5BDB', fontWeight: 600, width: '100%', textAlign: 'center' }}>
+            {mode === 'signup' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+          </button>
           <Divider />
-          <GoogleButton onClick={onContinue} />
+          <GoogleButton onClick={handleGoogle} />
         </div>
       </div>
       <div className="py-6 text-center flex-shrink-0">
@@ -619,7 +674,61 @@ function AuthScreen({ onContinue }: { onContinue: () => void }) {
 }
 
 function EmailSentScreen({ onContinue }: { onContinue: () => void }) {
+  const { user, resendVerification, checkEmailVerified, firebaseReady } = useAuth()
   const [countdown, setCountdown] = useState(30)
+  const [resent, setResent] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [notVerified, setNotVerified] = useState(false)
+
+  useEffect(() => {
+    if (countdown <= 0) return
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [countdown])
+
+  // Poll for email verification every 5 seconds while on this screen
+  useEffect(() => {
+    if (!firebaseReady) return
+    const interval = setInterval(async () => {
+      const verified = await checkEmailVerified()
+      if (verified) onContinue()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [firebaseReady, checkEmailVerified, onContinue])
+
+  const displayEmail = user?.email ?? 'your email'
+
+  const handleResend = async () => {
+    if (countdown > 0) return
+    try {
+      if (firebaseReady) await resendVerification()
+      setResent(true)
+      setCountdown(30)
+    } catch { /* ignore */ }
+  }
+
+  const handleVerifyClick = async () => {
+    if (!firebaseReady) {
+      // Prototype mode: proceed immediately
+      onContinue()
+      return
+    }
+    setChecking(true)
+    setNotVerified(false)
+    try {
+      const verified = await checkEmailVerified()
+      if (verified) {
+        onContinue()
+      } else {
+        setNotVerified(true)
+      }
+    } catch {
+      setNotVerified(true)
+    } finally {
+      setChecking(false)
+    }
+  }
+
   return (
     <div className="px-6 flex flex-col h-full">
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
@@ -629,30 +738,65 @@ function EmailSentScreen({ onContinue }: { onContinue: () => void }) {
         <div className="text-center">
           <h2 style={{ fontSize: 24, fontWeight: 800, color: '#101828', letterSpacing: '-0.5px', marginBottom: 10 }}>Check your inbox</h2>
           <p style={{ fontSize: 14, color: '#667085', lineHeight: 1.7 }}>
-            We sent a sign-in link to{' '}
-            <span style={{ color: '#101828', fontWeight: 600 }}>arjun.m@vgu.ac.in</span>
+            We sent a verification link to{' '}
+            <span style={{ color: '#101828', fontWeight: 600 }}>{displayEmail}</span>
             {'. '}Tap it on this device to continue.
           </p>
+          {resent && <p style={{ fontSize: 12, color: '#059669', marginTop: 8, fontWeight: 600 }}>✓ Verification email resent</p>}
+          {notVerified && (
+            <p style={{ fontSize: 12, color: '#E11D48', marginTop: 8, fontWeight: 600 }}>
+              Email not yet verified. Please check your inbox and tap the link first.
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-center gap-3 w-full">
-          <button onClick={onContinue}
-            style={{ fontSize: 14, fontWeight: 700, color: '#3B5BDB' }}>
+          <button onClick={handleResend}
+            style={{ fontSize: 14, fontWeight: 700, color: countdown > 0 ? '#98A2B3' : '#3B5BDB' }}>
             {countdown > 0 ? `Resend link (${countdown}s)` : 'Resend link'}
           </button>
           <button style={{ fontSize: 13, color: '#667085' }}>Use a different email</button>
         </div>
       </div>
       <div className="pb-8 flex-shrink-0">
-        <PrimaryButton label="I got the link →" onClick={onContinue} />
+        <PrimaryButton label={checking ? 'Checking…' : 'I verified my email →'} onClick={handleVerifyClick} disabled={checking} />
       </div>
     </div>
   )
 }
 
 function ProfileScreen({ onContinue }: { onContinue: () => void }) {
+  const { user, updateProfile, firebaseReady } = useAuth()
   const [name, setName] = useState('')
   const [area, setArea] = useState('')
-  const [hasPhoto, setHasPhoto] = useState(false)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handlePhotoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    const url = URL.createObjectURL(file)
+    setPhotoPreview(url)
+  }
+
+  const handleContinue = async () => {
+    setBusy(true)
+    try {
+      if (firebaseReady && user?.uid) {
+        let photoUrl: string | undefined
+        if (photoFile) {
+          photoUrl = await uploadProfilePhoto(user.uid, photoFile)
+        }
+        await updateProfile({ name: name.trim(), area: area.trim(), ...(photoUrl ? { photoUrl } : {}) })
+      }
+      onContinue()
+    } catch { /* proceed anyway in prototype mode */ } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="px-6 flex flex-col h-full">
       <div className="pt-6 flex-shrink-0">
@@ -663,11 +807,11 @@ function ProfileScreen({ onContinue }: { onContinue: () => void }) {
         {/* Photo upload */}
         <div className="flex flex-col items-center gap-2">
           <div className="relative">
-            <button onClick={() => setHasPhoto(h => !h)}
+            <button onClick={() => fileInputRef.current?.click()}
               className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden"
-              style={{ background: hasPhoto ? '#EDF1FF' : '#F2F4F7', border: '2.5px solid #E4E7EC' }}>
-              {hasPhoto
-                ? <span style={{ fontSize: 30, fontWeight: 800, color: '#3451B2' }}>AM</span>
+              style={{ background: photoPreview ? '#EDF1FF' : '#F2F4F7', border: '2.5px solid #E4E7EC' }}>
+              {photoPreview
+                ? <img src={photoPreview} alt="Profile" className="w-full h-full object-cover" />
                 : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
                   </svg>
@@ -680,6 +824,7 @@ function ProfileScreen({ onContinue }: { onContinue: () => void }) {
                 <circle cx="12" cy="13" r="4"/>
               </svg>
             </div>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoPick} />
           </div>
           <span style={{ fontSize: 12, color: '#98A2B3' }}>Tap to add photo</span>
         </div>
@@ -689,14 +834,43 @@ function ProfileScreen({ onContinue }: { onContinue: () => void }) {
           value={area} onChange={setArea} />
       </div>
       <div className="py-6 flex-shrink-0">
-        <PrimaryButton label="Continue" onClick={onContinue} disabled={!name.trim() || !area.trim()} />
+        <PrimaryButton label={busy ? 'Saving…' : 'Continue'} onClick={handleContinue} disabled={!name.trim() || !area.trim() || busy} />
       </div>
     </div>
   )
 }
 
 function CollegeIDScreen({ onContinue, onBack }: { onContinue: () => void; onBack: () => void }) {
+  const { user, updateProfile, firebaseReady } = useAuth()
   const [uploaded, setUploaded] = useState(false)
+  const [idFile, setIdFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIdFile(file)
+    setUploaded(true)
+  }
+
+  const handleSubmit = async () => {
+    if (!uploaded) return
+    setBusy(true)
+    try {
+      if (firebaseReady && user?.uid && idFile) {
+        const collegeIdUrl = await uploadCollegeId(user.uid, idFile)
+        await updateProfile({ collegeIdUrl, verificationStatus: 'pending' })
+      }
+      onContinue()
+    } catch {
+      // In prototype mode or on error, still proceed
+      onContinue()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="px-6 flex flex-col h-full">
       <div className="pt-6 flex-shrink-0">
@@ -710,7 +884,35 @@ function CollegeIDScreen({ onContinue, onBack }: { onContinue: () => void; onBac
         <TrustBanner text="Used only to confirm your college. Never shown to other users." />
       </div>
       <div className="flex-1 flex flex-col justify-center gap-4">
-        <UploadArea uploaded={uploaded} onToggle={() => setUploaded(u => !u)} />
+        {/* Hidden file input */}
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFilePick} />
+        {/* Upload area — now triggers real file picker */}
+        <button onClick={() => fileInputRef.current?.click()}
+          className="w-full flex flex-col items-center gap-3 p-8 rounded-[16px] transition-all"
+          style={{ border: `2px dashed ${uploaded ? '#12B76A' : '#D0D5DD'}`, background: uploaded ? '#F0FDF4' : '#F9FAFB' }}>
+          {uploaded ? (
+            <>
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: '#D1FADF' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#027A48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#027A48' }}>ID uploaded</p>
+              <p style={{ fontSize: 11, color: '#6CE9A6' }}>Tap to replace</p>
+            </>
+          ) : (
+            <>
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: '#F2F4F7' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#667085' }}>Tap to upload</p>
+              <p style={{ fontSize: 11, color: '#98A2B3' }}>JPG, PNG · Max 5 MB</p>
+            </>
+          )}
+        </button>
         <div className="flex items-start gap-2 px-1">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
             <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
@@ -721,7 +923,7 @@ function CollegeIDScreen({ onContinue, onBack }: { onContinue: () => void; onBac
         </div>
       </div>
       <div className="py-6 flex-shrink-0">
-        <PrimaryButton label="Submit for verification" onClick={onContinue} disabled={!uploaded} />
+        <PrimaryButton label={busy ? 'Uploading…' : 'Submit for verification'} onClick={handleSubmit} disabled={!uploaded || busy} />
       </div>
     </div>
   )
@@ -878,7 +1080,28 @@ function VerifyRejectedScreen({ onReupload }: { onReupload: () => void }) {
 }
 
 function ChooseRoleScreen({ onContinue }: { onContinue: (role: RoleKey) => void }) {
+  const { setRoles, firebaseReady } = useAuth()
   const [selected, setSelected] = useState<RoleKey | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const roleKeyToArray = (r: RoleKey): string[] => {
+    if (r === 'both') return ['customer', 'rider']
+    return [r]
+  }
+
+  const handleContinue = async () => {
+    if (!selected) return
+    setBusy(true)
+    try {
+      if (firebaseReady) {
+        await setRoles(roleKeyToArray(selected))
+      }
+      onContinue(selected)
+    } catch { /* proceed anyway */ } finally {
+      setBusy(false)
+    }
+  }
+
   const roles: { id: RoleKey; title: string; desc: string; icon: React.ReactNode }[] = [
     {
       id: 'customer',
@@ -915,7 +1138,7 @@ function ChooseRoleScreen({ onContinue }: { onContinue: (role: RoleKey) => void 
         ))}
       </div>
       <div className="py-6 flex-shrink-0">
-        <PrimaryButton label="Continue" onClick={() => selected && onContinue(selected)} disabled={!selected} />
+        <PrimaryButton label={busy ? 'Saving…' : 'Continue'} onClick={handleContinue} disabled={!selected || busy} />
       </div>
     </div>
   )
@@ -1006,7 +1229,12 @@ export default function OnboardingContent({
         {screen === 'splash-1' && <SplashScreen slide={1} onNext={() => setScreen('splash-2')} onSkip={() => setScreen('auth')} />}
         {screen === 'splash-2' && <SplashScreen slide={2} onNext={() => setScreen('splash-3')} onSkip={() => setScreen('auth')} />}
         {screen === 'splash-3' && <SplashScreen slide={3} onNext={() => setScreen('auth')} onSkip={() => setScreen('auth')} />}
-        {screen === 'auth' && <AuthScreen onContinue={() => setScreen('email-sent')} />}
+        {screen === 'auth' && (
+          <AuthScreen
+            onContinue={() => setScreen('email-sent')}
+            onSignedIn={() => setScreen('profile')}
+          />
+        )}
         {screen === 'email-sent' && <EmailSentScreen onContinue={() => setScreen('profile')} />}
         {screen === 'profile' && <ProfileScreen onContinue={() => setScreen('college-id')} />}
         {screen === 'college-id' && <CollegeIDScreen onContinue={() => setScreen('guidelines')} onBack={() => setScreen('profile')} />}

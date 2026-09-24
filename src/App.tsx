@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Map, { type MapMode } from './components/Map'
 import RiderContent, {
   RIDER_SHEET_CONFIG, RIDER_HIDE_TOPBAR, RIDER_SHOW_NAV, type RiderScreen,
@@ -6,6 +6,7 @@ import RiderContent, {
 import OnboardingContent, { ALL_ONBOARDING_SCREENS, type OnboardingScreen } from './OnboardingFlow'
 import CommonContent, { ALL_COMMON_SCREENS, type CommonScreen } from './CommonFlow'
 import SOSContent, { type SOSScreen } from './SOSFlow'
+import { useAuth } from './context/AuthContext'
 
 type CustomerScreen =
   | 'idle' | 'searching' | 'ticket-form' | 'waiting'
@@ -660,6 +661,7 @@ function RiderBottomNav({ active, setActive }: { active: string; setActive: (s: 
 // ── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const { user, loading: authLoading, firebaseReady } = useAuth()
   const [appSection, setAppSection] = useState<'onboarding' | 'customer' | 'rider' | 'common'>('onboarding')
   const [onboardingScreen, setOnboardingScreen] = useState<OnboardingScreen>('splash-intro')
   const [commonScreen, setCommonScreen] = useState<CommonScreen>('profile')
@@ -674,6 +676,51 @@ export default function App() {
   const [days, setDays] = useState<Record<string, boolean>>({ M: true, T: true, W: true, Th: true, F: true, S: false })
   const [repeatWeekly, setRepeatWeekly] = useState(false)
   const [womenOnly, setWomenOnly] = useState(false)
+
+  // ── Auth-based routing ─────────────────────────────────────────────────────
+  // Restores sessions on load and auto-navigates after sign-in. Prototype mode
+  // (no .env) keeps the original manual state-based navigation untouched.
+  useEffect(() => {
+    if (authLoading || !firebaseReady) return
+
+    if (!user) {
+      // Not signed in → onboarding
+      setAppSection('onboarding')
+      setOnboardingScreen('splash-intro')
+      return
+    }
+
+    if (!user.roles || user.roles.length === 0) return
+
+    // Signed in with a role → leave onboarding, unless the user is mid-way
+    // through the role-selection steps (choose-role → role-confirmed).
+    if (
+      appSection === 'onboarding' &&
+      onboardingScreen !== 'choose-role' &&
+      onboardingScreen !== 'role-confirmed'
+    ) {
+      const primaryRole = user.roles[0] as 'customer' | 'rider'
+      setRole(primaryRole)
+      setAppSection(primaryRole)
+      if (primaryRole === 'rider') setRiderScreen('rider-home-idle')
+      else setCustomerScreen('idle')
+    }
+  }, [authLoading, user, firebaseReady, appSection, onboardingScreen])
+
+  // ── Verification gate (task 1.7) ──────────────────────────────────────────
+  // Unverified users can browse but cannot raise tickets. In prototype mode
+  // (no Firebase) everything stays unlocked.
+  const isVerified = !firebaseReady || user?.verificationStatus === 'verified'
+  const handleCustomerSearch = () => {
+    if (!isVerified) {
+      setAppSection('onboarding')
+      setOnboardingScreen(
+        user?.verificationStatus === 'rejected' ? 'verify-rejected' : 'verify-pending',
+      )
+      return
+    }
+    setCustomerScreen('searching')
+  }
 
   const isOnboarding = appSection === 'onboarding'
   const isCommon = appSection === 'common'
@@ -772,7 +819,7 @@ export default function App() {
               </div>
               {role === 'customer' ? (
                 <div className="px-4 overflow-y-auto" style={{ height: 'calc(100% - 22px)', scrollbarWidth: 'none' }}>
-                  {customerScreen === 'idle' && <IdleContent onSearch={() => setCustomerScreen('searching')} />}
+                  {customerScreen === 'idle' && <IdleContent onSearch={handleCustomerSearch} />}
                   {customerScreen === 'searching' && (
                     <SearchingContent onSelect={() => setCustomerScreen('ticket-form')} onBack={() => setCustomerScreen('idle')} />
                   )}

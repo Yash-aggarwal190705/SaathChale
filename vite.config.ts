@@ -1,6 +1,7 @@
 import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
@@ -20,6 +21,32 @@ export default defineConfig(({ mode }) => {
     plugins: [
 react(),
       tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['icons/app-icon.svg'],
+        manifest: {
+          name: 'SaathChalo',
+          short_name: 'SaathChalo',
+          description: 'Verified commute sharing for students. Share fuel, not fares — together, let\'s go.',
+          start_url: '/',
+          scope: '/',
+          display: 'standalone',
+          background_color: '#F8FAFF',
+          theme_color: '#3B5BDB',
+          icons: [
+            {
+              src: '/icons/app-icon.svg',
+              sizes: 'any',
+              type: 'image/svg+xml',
+              purpose: 'any maskable',
+            },
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+          navigateFallback: '/index.html',
+        },
+      }),
       figmaSiteConfiguration(siteConfiguration),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),

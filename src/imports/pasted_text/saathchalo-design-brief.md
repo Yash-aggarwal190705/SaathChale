@@ -1,4 +1,4 @@
-ROLE
+﻿ROLE
 You are a senior mobile UI/UX designer working directly in Figma through the Figma MCP tools. You are extending an existing design, not starting a new one. Design production-ready, developer-friendly mobile screens that will later be converted into Flutter.
 
 EXISTING FILE (read this first)
@@ -11,7 +11,7 @@ It already contains Onboarding, Customer, and Rider pages, plus a shared design 
 5. Build in stages with use_figma. After each stage, call get_screenshot and check alignment, text clipping, overflow and contrast. Fix problems before moving on.
 
 PROJECT CONTEXT
-- App: CampusRide (working name), a verified, closed-community ride-sharing app for daily commutes, starting with college students in Jaipur, India.
+- App: SaathChalo (working name), a verified, closed-community ride-sharing app for daily commutes, starting with college students in Jaipur, India.
 - These screens are shared by both Customer and Rider roles — the same account can hold both roles, so Profile & Settings must reflect that.
 - Content rules: currency is Rs. Never use "driver," "earn," "fare," "income" or "commission" anywhere, including placeholder/microcopy text — use "fuel share" instead. UI text in English. Fictional sample data only. Never display another user's raw phone number; show "Call (masked)" instead.
 - Pricing logic to reflect accurately wherever a fare/cost breakdown is shown: Total = (distance x fixed Rs per km fuel-share rate) + flat platform fee. Always show this as two separate line items (fuel share, platform fee) plus a total — never a single blended number — so the cost-sharing framing stays clear.
@@ -36,7 +36,7 @@ NEW COMPONENTS (Auto Layout, variants and properties, slash naming; reuse existi
 SCREENS (page "03 Common"; frames named Screen/Common/<Group>/<State>)
 
 GROUP A — Notifications
-A1. Notifications — List: top bar titled "Notifications", SegmentedControl/Tabs (All / Rides / Alerts), a chronological list of ListItem/Notification covering these sample cases: "Your ticket was accepted by Rohit S.", "Your ride starts in 30 minutes", "Priya cancelled your ride for tomorrow", "New matching ticket on your route" (rider-facing), "You're verified! Welcome to CampusRide" — mix of read and unread (unread shown with a dot and slightly bolder background).
+A1. Notifications — List: top bar titled "Notifications", SegmentedControl/Tabs (All / Rides / Alerts), a chronological list of ListItem/Notification covering these sample cases: "Your ticket was accepted by Rohit S.", "Your ride starts in 30 minutes", "Priya cancelled your ride for tomorrow", "New matching ticket on your route" (rider-facing), "You're verified! Welcome to SaathChalo" — mix of read and unread (unread shown with a dot and slightly bolder background).
 A2. Notifications — Empty: EmptyState with the text "No notifications yet. We'll let you know when something needs your attention."
 A3. Notification detail / tap-through (optional, brief): a short full-page view for a single notification, e.g. the "ticket accepted" one, showing the relevant ride summary card and a primary button that says where it would lead (e.g. "View ride details") — this is just to show the interaction pattern, not a fully built destination.
 
@@ -45,7 +45,7 @@ B1. Profile — Home: Card/ProfileHeader at top (sample name, verified badge, ra
    - Group "Account": Edit Profile, Verification Status, Emergency Contact
    - Group "Activity": Ride History, Payment Mode preference (Cash/UPI), Notification Preferences
    - Group "Trust & Safety": Safety Center, Women-only Matching (toggle row), Report a Problem
-   - Group "Support": Help & Support, Terms & Privacy, About CampusRide
+   - Group "Support": Help & Support, Terms & Privacy, About SaathChalo
    - A "Log Out" row styled distinctly (e.g. danger-colored text, no icon background) near the bottom.
    Bottom nav present and on the Profile tab.
 B2. Edit Profile: top bar with back arrow, avatar with an edit/camera overlay, Input/Text fields for name and area/locality (reuse from Onboarding), a read-only row showing the verified college email, primary Button "Save Changes".

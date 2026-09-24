@@ -1,4 +1,4 @@
-ROLE
+﻿ROLE
 You are a senior mobile UI/UX designer working directly in Figma through the Figma MCP tools. You are extending an existing design, not starting a new one. Design production-ready, developer-friendly mobile screens that will later be converted into Flutter.
 
 EXISTING FILE (read this first)
@@ -11,7 +11,7 @@ It already contains Customer Home screens, Rider screens, and a shared design sy
 5. Build in stages with use_figma. After each stage, call get_screenshot and check alignment, text clipping, overflow and contrast. Fix problems before moving on.
 
 PROJECT CONTEXT
-- App: CampusRide (working name), a verified, closed-community ride-sharing app for daily commutes, starting with college students in Jaipur, India.
+- App: SaathChalo (working name), a verified, closed-community ride-sharing app for daily commutes, starting with college students in Jaipur, India.
 - Onboarding must establish trust immediately: this is a verified-community app, not an open marketplace like Ola/Uber. Every screen should reinforce "verified", "safe" and "your college community."
 - A user can be a Customer, a Rider, or both — role is chosen after signup, and can include both roles on one account.
 - Content rules: currency is Rs. Never use "driver," "earn," "fare" or "commission" anywhere, including placeholder/microcopy text. UI text in English. Use fictional sample data only (no real names, emails or ID numbers).
@@ -41,7 +41,7 @@ A2. Splash — Slide 2: illustration placeholder, headline "Only fuel cost, shar
 A3. Splash — Slide 3: illustration placeholder, headline "Safety comes first", subtext "ID verification, live trip sharing and an SOS button on every ride", Dots/PageIndicator (3 of 3), primary button changes to "Get Started".
 
 GROUP B — Authentication
-B1. Sign Up / Log In: app logo/wordmark placeholder near the top, headline "Welcome to CampusRide", Input/Email ("College or work email"), primary Button "Continue with Email", a divider labeled "or", Button/Google "Continue with Google", and small footer text "By continuing, you agree to our Terms and Privacy Policy" with the terms/privacy words as tappable links (styled, not necessarily separate frames).
+B1. Sign Up / Log In: app logo/wordmark placeholder near the top, headline "Welcome to SaathChalo", Input/Email ("College or work email"), primary Button "Continue with Email", a divider labeled "or", Button/Google "Continue with Google", and small footer text "By continuing, you agree to our Terms and Privacy Policy" with the terms/privacy words as tappable links (styled, not necessarily separate frames).
 B2. Email Link Sent (confirmation state): centered illustration placeholder, headline "Check your inbox", subtext "We sent a sign-in link to [sample email]. Tap it on this device to continue.", a "Resend link" text button (with a 30s countdown state shown as a variant), and "Use a different email" link.
 B3. Basic Profile: Input/Text for full name, a circular photo-upload placeholder with a camera icon overlay (empty and filled states), Input/Text for a general "area/locality" (helper text: "Just your area, not your full address"), primary Button "Continue".
 
@@ -49,11 +49,11 @@ GROUP C — Verification
 C1. College ID Upload: Stepper/Header ("Step 1 of 2"), headline "Verify you're a student here", Banner/TrustNote ("Used only to confirm your college. Never shown to other users."), Input/Upload for the ID card (front only), and a small caption showing an example of an acceptable photo. Primary Button "Submit for verification" (disabled until uploaded).
 C2. Consent & Community Guidelines: Stepper/Header ("Step 2 of 2"), three short guideline rows with icons (e.g. "Only pay or accept fuel-cost sharing", "Treat your co-rider with respect", "Follow traffic and safety rules"), Checkbox/Consent ("I agree to the Community Guidelines"), primary Button "Finish".
 C3. Verification Pending: Status/VerificationPending — illustration placeholder, headline "We're verifying your ID", subtext "This usually takes under 24 hours. We'll notify you the moment you're verified.", a disabled/secondary button "Explore the app" (limited access) and a note that full features unlock after verification.
-C4. Verification Approved (success state, brief/toast-like full screen): checkmark illustration, headline "You're verified!", subtext "Welcome to the CampusRide community.", primary Button "Continue".
+C4. Verification Approved (success state, brief/toast-like full screen): checkmark illustration, headline "You're verified!", subtext "Welcome to the SaathChalo community.", primary Button "Continue".
 C5. Verification Rejected: Status/VerificationRejected — illustration placeholder, headline "We couldn't verify your ID", subtext with a sample reason ("The photo was blurry — please try again"), primary Button "Re-upload ID", secondary text link "Contact support".
 
 GROUP D — Role Selection
-D1. Choose Your Role: headline "How will you use CampusRide?", subtext "You can change this anytime in Settings", three Card/RoleOption items stacked vertically — "Customer" (I need a ride), "Rider" (I have a vehicle and go regularly), "Both" — each selectable with a clear selected state (border + check), primary Button "Continue" (disabled until one is selected).
+D1. Choose Your Role: headline "How will you use SaathChalo?", subtext "You can change this anytime in Settings", three Card/RoleOption items stacked vertically — "Customer" (I need a ride), "Rider" (I have a vehicle and go regularly), "Both" — each selectable with a clear selected state (border + check), primary Button "Continue" (disabled until one is selected).
 D2. Role Confirmation / Handoff: a short full-screen confirmation matching the chosen role, e.g. for Customer: illustration + "You're all set to find your first ride" + primary Button "Find a ride" (leads conceptually to Customer Home); for Rider: "Let's get your vehicle verified" + primary Button "Set up as a Rider" (leads conceptually to the existing Rider Setup flow on page "02 Rider"); for Both: both options shown as two secondary buttons stacked.
 
 PROTOTYPE

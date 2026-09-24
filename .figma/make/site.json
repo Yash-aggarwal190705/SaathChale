@@ -1,5 +1,7 @@
 {
-  "description": "Effortlessly manage and analyze file data with this intuitive web app, designed for professionals seeking streamlined insights and enhanced productivity.",
+  "title": "SaathChalo",
+  "description": "Verified commute sharing for students. Share fuel, not fares — together, let's go.",
+  "language": "en",
   "robots": {
     "index": false
   },

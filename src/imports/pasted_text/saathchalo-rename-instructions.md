@@ -1,4 +1,4 @@
-ROLE
+﻿ROLE
 You are a senior mobile UI/UX designer and motion designer working directly in Figma through the Figma MCP tools. You are editing an existing file, not starting a new one.
 
 EXISTING FILE (read this first)
@@ -10,24 +10,24 @@ It contains pages "00 Onboarding", "01 Customer", "02 Rider", "03 Common", "04 S
 4. Work page by page. After each page's edits, call get_screenshot on a sample of its frames and verify nothing broke (text not clipped, no leftover old name, layout intact).
 
 PROJECT CONTEXT
-The app's working name "CampusRide" is being replaced with the final name "SaathChalo" (Hindi for "walk/travel together" — written as one word, capital S and capital C, no space). This is a verified, closed-community ride-sharing app for daily commutes, starting with college students in Jaipur, India.
+The app's working name "SaathChalo" is being replaced with the final name "SaathChalo" (Hindi for "walk/travel together" — written as one word, capital S and capital C, no space). This is a verified, closed-community ride-sharing app for daily commutes, starting with college students in Jaipur, India.
 
 ====================================================================
-TASK A — RENAME "CampusRide" TO "SaathChalo" ACROSS THE ENTIRE FILE
+TASK A — RENAME "SaathChalo" TO "SaathChalo" ACROSS THE ENTIRE FILE
 ====================================================================
 Do this first, across every page, before touching the splash screen animation in Task B.
 
 1. Update the Figma file's own title to "SaathChalo - MVP Screens".
-2. Find every text layer across every page and frame that contains the literal string "CampusRide" (check exact case and also common variants like "Campus Ride" with a space, "campusride" lowercase, if any exist) and replace it with "SaathChalo". This includes but is not limited to:
+2. Find every text layer across every page and frame that contains the literal string "SaathChalo" (check exact case and any lowercase or spaced variants, if any exist) and replace it with "SaathChalo". This includes but is not limited to:
    - The onboarding splash headlines and any logo/wordmark placeholder text layers
    - The top app bar / header area on Customer Home, Rider Home, and any other screen that shows a wordmark
-   - The Welcome/Sign Up screen headline ("Welcome to CampusRide" -> "Welcome to SaathChalo")
-   - The "About CampusRide" settings row on the Profile page -> "About SaathChalo"
+   - The Welcome/Sign Up screen headline ("Welcome to SaathChalo" -> "Welcome to SaathChalo")
+   - The "About SaathChalo" settings row on the Profile page -> "About SaathChalo"
    - Any footer, legal, or terms/privacy text that references the app by name
    - Any component's internal text (e.g. if a top-bar component has the wordmark baked in, edit the component itself once so every instance updates)
-3. Update layer, frame, component and page names ONLY where they literally contain "CampusRide" as text (e.g. a layer named "CampusRide Wordmark" becomes "SaathChalo Wordmark"). Do not rename structural/functional layer names that just happen to be nearby (e.g. don't touch "Screen/Customer/Home/Idle").
+3. Update layer, frame, component and page names ONLY where they literally contain "SaathChalo" as text (e.g. a layer named "SaathChalo Wordmark" becomes "SaathChalo Wordmark"). Do not rename structural/functional layer names that just happen to be nearby (e.g. don't touch "Screen/Customer/Home/Idle").
 4. Do not change colors, fonts, icons, or layout as part of this task — this is a text/naming pass only.
-5. After the pass, do a final sweep: search every page's screenshots for any leftover visible instance of "CampusRide" and fix it before moving to Task B.
+5. After the pass, do a final sweep: search every page's screenshots for any leftover visible instance of "SaathChalo" and fix it before moving to Task B.
 
 ====================================================================
 TASK B — ANIMATED SPLASH SCREEN
@@ -63,7 +63,7 @@ HANDOFF NOTE FOR FLUTTER
 Add a text note near the SP0-SP2 sequence in Figma (a simple sticky/comment or annotation frame) explaining: "This keyframe sequence is a reference for the real splash animation, intended to be built in Flutter using Rive or Lottie (exported from After Effects) rather than reproduced frame-by-frame in code. Approximate timing: dot appears at 0ms, wordmark assembles 0-500ms with a slight overshoot, tagline fades in 500-700ms, hold 700-1500ms, then transition into Slide 1."
 
 RENAME CHECK FOR THIS PAGE
-Confirm none of the new SP0-SP5 frames introduce "CampusRide" anywhere (they shouldn't, since they're new, but double check any copied/duplicated text).
+Confirm none of the new SP0-SP5 frames introduce "SaathChalo" anywhere (they shouldn't, since they're new, but double check any copied/duplicated text).
 
 FLUTTER-READY RULES
 - Auto Layout everywhere except the logo mark itself, where absolute/vector positioning is expected.
@@ -72,4 +72,4 @@ FLUTTER-READY RULES
 - Icons/illustrations are vectors exportable as SVG.
 
 HANDOFF
-When done, send me: the file link, confirmation that Task A's rename pass is complete with no remaining "CampusRide" instances found (or a list of any you couldn't safely change and why), links/node ids for the new SP0-SP5 frames, the list of any new components/variables added, and anything you had to approximate. Do not touch any screens beyond what's listed in Task A and Task B. Ask me first before doing anything else.
+When done, send me: the file link, confirmation that Task A's rename pass is complete with no remaining "SaathChalo" instances found (or a list of any you couldn't safely change and why), links/node ids for the new SP0-SP5 frames, the list of any new components/variables added, and anything you had to approximate. Do not touch any screens beyond what's listed in Task A and Task B. Ask me first before doing anything else.

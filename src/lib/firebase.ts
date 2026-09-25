@@ -18,22 +18,22 @@ import { getMessaging, isSupported, type Messaging } from 'firebase/messaging'
 const env = import.meta.env
 
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.VITE_FIREBASE_APP_ID,
-  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID,
-  databaseURL: env.VITE_FIREBASE_DATABASE_URL,
+  apiKey: "AIzaSyAdauHEBv1zLH-b-RXyGCAkYzdpFnBZhJk",
+  authDomain: "saathchalo-96bea.firebaseapp.com",
+  projectId: "saathchalo-96bea",
+  storageBucket: "saathchalo-96bea.firebasestorage.app",
+  messagingSenderId: "394400154832",
+  appId: "1:394400154832:web:0f0eea172837ea9af7cad5",
+  measurementId: "G-32KGTEP15S",
+  databaseURL: "https://saathchalo-96bea-default-rtdb.firebaseio.com",
 }
 
 /** True only when a real Firebase config is present (not the .env.example placeholders). */
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey &&
-    firebaseConfig.projectId &&
-    !firebaseConfig.apiKey.startsWith('your-') &&
-    !firebaseConfig.projectId.startsWith('your-'),
+  firebaseConfig.projectId &&
+  !firebaseConfig.apiKey.startsWith('your-') &&
+  !firebaseConfig.projectId.startsWith('your-'),
 )
 
 let app: FirebaseApp | null = null

@@ -7,6 +7,8 @@ import OnboardingContent, { ALL_ONBOARDING_SCREENS, type OnboardingScreen } from
 import CommonContent, { ALL_COMMON_SCREENS, type CommonScreen } from './CommonFlow'
 import SOSContent, { type SOSScreen } from './SOSFlow'
 import { useAuth } from './context/AuthContext'
+import { createTicket, cancelTicket, subscribeToTicket, type Ticket } from './lib/ticketService'
+import { DEFAULT_PICKUP, DEFAULT_DROP } from './lib/demoData'
 
 type CustomerScreen =
   | 'idle' | 'searching' | 'ticket-form' | 'waiting'
@@ -348,11 +350,11 @@ function SearchingContent({ onSelect, onBack }: { onSelect: () => void; onBack: 
   )
 }
 
-function TicketFormContent({ days, setDays, repeatWeekly, setRepeatWeekly, womenOnly, setWomenOnly, onRaise, onBack }: {
+function TicketFormContent({ days, setDays, repeatWeekly, setRepeatWeekly, womenOnly, setWomenOnly, onRaise, onBack, isRaising }: {
   days: Record<string, boolean>; setDays: (d: Record<string, boolean>) => void
   repeatWeekly: boolean; setRepeatWeekly: (v: boolean) => void
   womenOnly: boolean; setWomenOnly: (v: boolean) => void
-  onRaise: () => void; onBack: () => void
+  onRaise: () => void; onBack: () => void; isRaising?: boolean
 }) {
   const dayDefs = [{ k:'M',l:'M'},{k:'T',l:'T'},{k:'W',l:'W'},{k:'Th',l:'T'},{k:'F',l:'F'},{k:'S',l:'S'}]
   return (
@@ -369,9 +371,9 @@ function TicketFormContent({ days, setDays, repeatWeekly, setRepeatWeekly, women
             <MapPinSmIcon color="#3B5BDB" />
           </div>
           <div className="flex-1">
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>Mansarovar Metro</p>
-            <p style={{ fontSize: 11, color: '#667085', margin: '4px 0' }}>10.2 km · ~28 min</p>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>VGU Jaipur</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>{DEFAULT_PICKUP.label}</p>
+            <p style={{ fontSize: 11, color: '#667085', margin: '4px 0' }}>~10 km · ~28 min</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>{DEFAULT_DROP.label}</p>
           </div>
         </div>
       </div>
@@ -396,6 +398,7 @@ function TicketFormContent({ days, setDays, repeatWeekly, setRepeatWeekly, women
       <div style={{ borderTop: '1px solid #F2F4F7', paddingTop: 4 }}>
         {[
           { label: 'Repeat weekly', sub: 'Auto-raise this ticket every week', value: repeatWeekly, onChange: setRepeatWeekly },
+          { label: 'Women only', sub: 'Match only with women riders', value: womenOnly, onChange: setWomenOnly },
         ].map(t => (
           <div key={t.label} className="flex items-center justify-between py-3" style={{ borderBottom: '1px solid #F2F4F7' }}>
             <div>
@@ -414,14 +417,16 @@ function TicketFormContent({ days, setDays, repeatWeekly, setRepeatWeekly, women
         </div>
         <span style={{ fontSize: 16, fontWeight: 700, color: '#101828' }}>₹3.9 / km</span>
       </div>
-      <button onClick={onRaise}
+      <button onClick={onRaise} disabled={isRaising}
         className="w-full py-4 rounded-[16px] text-white transition-all active:scale-[0.98]"
-        style={{ background: '#3B5BDB', fontSize: 15, fontWeight: 700 }}>Raise Ticket</button>
+        style={{ background: '#3B5BDB', fontSize: 15, fontWeight: 700, opacity: isRaising ? 0.6 : 1 }}>
+        {isRaising ? 'Creating…' : 'Raise Ticket'}
+      </button>
     </div>
   )
 }
 
-function WaitingContent({ onCancel, onRiderFound }: { onCancel: () => void; onRiderFound: () => void }) {
+function WaitingContent({ onCancel, onRiderFound, ticket }: { onCancel: () => void; onRiderFound: () => void; ticket?: Ticket | null }) {
   return (
     <div className="space-y-3">
       <div className="text-center py-1">
@@ -432,9 +437,9 @@ function WaitingContent({ onCancel, onRiderFound }: { onCancel: () => void; onRi
         <div className="px-3.5 py-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p style={{ fontSize: 12, color: '#667085' }}>Tomorrow, 8:00–8:30 AM</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: '#101828', marginTop: 2 }}>Mansarovar → VGU Jaipur</p>
-              <p style={{ fontSize: 11, color: '#98A2B3', marginTop: 3 }}>₹40 fuel share · Mon–Fri</p>
+              <p style={{ fontSize: 12, color: '#667085' }}>{ticket ? `${ticket.date} · ${ticket.timeWindowStart}–${ticket.timeWindowEnd}` : 'Tomorrow, 8:00–8:30 AM'}</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#101828', marginTop: 2 }}>{ticket ? `${ticket.pickupLabel} → ${ticket.dropLabel}` : 'Mansarovar → VGU Jaipur'}</p>
+              <p style={{ fontSize: 11, color: '#98A2B3', marginTop: 3 }}>{ticket ? `₹${ticket.fuelShare} fuel share · ${ticket.days.join('–')}` : '₹40 fuel share · Mon–Fri'}</p>
             </div>
             <PillStatus status="pending" />
           </div>
@@ -676,6 +681,9 @@ export default function App() {
   const [days, setDays] = useState<Record<string, boolean>>({ M: true, T: true, W: true, Th: true, F: true, S: false })
   const [repeatWeekly, setRepeatWeekly] = useState(false)
   const [womenOnly, setWomenOnly] = useState(false)
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
+  const [activeTicket, setActiveTicket] = useState<Ticket | null>(null)
+  const [isRaisingTicket, setIsRaisingTicket] = useState(false)
 
   // ── Auth-based routing ─────────────────────────────────────────────────────
   // Restores sessions on load and auto-navigates after sign-in. Prototype mode
@@ -711,6 +719,19 @@ export default function App() {
   // Unverified users can browse but cannot raise tickets. In prototype mode
   // (no Firebase) everything stays unlocked.
   const isVerified = !firebaseReady || user?.verificationStatus === 'verified'
+
+  // ── Ticket subscription (Phase 2) ─────────────────────────────────────────
+  useEffect(() => {
+    if (!activeTicketId) return
+    const unsub = subscribeToTicket(activeTicketId, (ticket) => {
+      setActiveTicket(ticket)
+      if (ticket && ticket.status === 'accepted' && customerScreen === 'waiting') {
+        setCustomerScreen('rider-accepted')
+      }
+    })
+    return unsub
+  }, [activeTicketId, customerScreen])
+
   const handleCustomerSearch = () => {
     if (!isVerified) {
       setAppSection('onboarding')
@@ -827,10 +848,46 @@ export default function App() {
                     <TicketFormContent days={days} setDays={setDays}
                       repeatWeekly={repeatWeekly} setRepeatWeekly={setRepeatWeekly}
                       womenOnly={womenOnly} setWomenOnly={setWomenOnly}
-                      onRaise={() => setCustomerScreen('waiting')} onBack={() => setCustomerScreen('searching')} />
+                      isRaising={isRaisingTicket}
+                      onRaise={async () => {
+                        setIsRaisingTicket(true)
+                        try {
+                          const selectedDays = Object.entries(days).filter(([, v]) => v).map(([k]) => k)
+                          const ticketId = await createTicket({
+                            customerId: user?.uid ?? 'demo-customer',
+                            customerName: user?.name ?? 'Demo User',
+                            pickupLat: DEFAULT_PICKUP.lat,
+                            pickupLng: DEFAULT_PICKUP.lng,
+                            pickupLabel: DEFAULT_PICKUP.label,
+                            dropLat: DEFAULT_DROP.lat,
+                            dropLng: DEFAULT_DROP.lng,
+                            dropLabel: DEFAULT_DROP.label,
+                            date: new Date().toISOString().split('T')[0],
+                            timeWindowStart: '08:00',
+                            timeWindowEnd: '08:30',
+                            days: selectedDays,
+                            repeatWeekly,
+                            womenOnly,
+                          })
+                          setActiveTicketId(ticketId)
+                          setCustomerScreen('waiting')
+                        } catch (err) {
+                          console.error('[App] Failed to create ticket:', err)
+                        } finally {
+                          setIsRaisingTicket(false)
+                        }
+                      }}
+                      onBack={() => setCustomerScreen('searching')} />
                   )}
                   {customerScreen === 'waiting' && (
-                    <WaitingContent onCancel={() => setCustomerScreen('idle')} onRiderFound={() => setCustomerScreen('rider-accepted')} />
+                    <WaitingContent ticket={activeTicket}
+                      onCancel={async () => {
+                        if (activeTicketId) await cancelTicket(activeTicketId)
+                        setActiveTicketId(null)
+                        setActiveTicket(null)
+                        setCustomerScreen('idle')
+                      }}
+                      onRiderFound={() => setCustomerScreen('rider-accepted')} />
                   )}
                   {customerScreen === 'rider-accepted' && (
                     <RiderAcceptedContent onRideDay={() => setCustomerScreen('rider-arriving')} onCancel={() => setCustomerScreen('idle')} />
@@ -846,6 +903,7 @@ export default function App() {
                 </div>
               ) : (
                 <RiderContent screen={riderScreen} setScreen={setRiderScreen}
+                  riderUid={user?.uid ?? null} riderName={user?.name ?? null}
                   onSOS={() => { setSosScreen('sos-confirm'); setShowSOS(true) }} />
               )}
             </div>

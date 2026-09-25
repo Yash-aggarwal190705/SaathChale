@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { subscribeToOpenTickets, updateTicketStatus, type Ticket } from './lib/ticketService'
 
 export type RiderScreen =
   | 'setup-vehicle' | 'setup-documents' | 'setup-promise'
@@ -302,8 +303,13 @@ function CustomerSummaryCard({ compact = false }: { compact?: boolean }) {
   )
 }
 
-function TicketRequestCard({ onAccept, onDecline, onView, detour = '0.6 km' }:
-  { onAccept?: () => void; onDecline?: () => void; onView?: () => void; detour?: string }) {
+function TicketRequestCard({ onAccept, onDecline, onView, detour = '0.6 km', ticket }:
+  { onAccept?: () => void; onDecline?: () => void; onView?: () => void; detour?: string; ticket?: Ticket }) {
+  const initials = ticket ? ticket.customerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'AM'
+  const name = ticket ? ticket.customerName : 'Arjun M.'
+  const route = ticket ? `${ticket.pickupLabel} → ${ticket.dropLabel}` : 'VGU Metro → Mansarovar'
+  const time = ticket ? `${ticket.timeWindowStart}–${ticket.timeWindowEnd}` : '5:30–6:00 PM'
+  const cost = ticket ? `₹${ticket.fuelShare} fuel share` : '₹40 fuel share'
   return (
     <div
       className="w-full text-left rounded-[12px] overflow-hidden transition-all"
@@ -316,11 +322,11 @@ function TicketRequestCard({ onAccept, onDecline, onView, detour = '0.6 km' }:
       <div className="px-3.5 pt-3 pb-2.5">
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: '#FFF4ED' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#B93815' }}>AM</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#B93815' }}>{initials}</span>
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#101828' }}>Arjun M.</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#101828' }}>{name}</span>
               <VerifiedBadge />
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full"
                 style={{ background: '#FFF8ED', border: '1px solid #FEDF89', fontSize: 10, fontWeight: 600, color: '#B54708' }}>
@@ -328,9 +334,9 @@ function TicketRequestCard({ onAccept, onDecline, onView, detour = '0.6 km' }:
               </span>
             </div>
             <p style={{ fontSize: 12, color: '#667085', marginTop: 2 }}>
-              VGU Metro → Mansarovar · 5:30–6:00 PM
+              {route} · {time}
             </p>
-            <p style={{ fontSize: 12, fontWeight: 600, color: '#101828', marginTop: 2 }}>₹40 fuel share</p>
+            <p style={{ fontSize: 12, fontWeight: 600, color: '#101828', marginTop: 2 }}>{cost}</p>
           </div>
           <ChevronRightIcon />
         </div>
@@ -919,8 +925,23 @@ function A7Content({ setScreen, seats, setSeats, detour, setDetour, riderWomenOn
   )
 }
 
-function B1Content({ setScreen }: { setScreen: (s: RiderScreen) => void }) {
+function B1Content({ setScreen, riderUid, riderName }: { setScreen: (s: RiderScreen) => void; riderUid?: string | null; riderName?: string | null }) {
   const [filter, setFilter] = useState('Today')
+  const [tickets, setTickets] = useState<Ticket[]>([])
+
+  useEffect(() => {
+    const unsub = subscribeToOpenTickets(setTickets)
+    return unsub
+  }, [])
+
+  const handleAccept = async (ticket: Ticket) => {
+    await updateTicketStatus(ticket.id, 'accepted', {
+      riderId: riderUid ?? 'demo-rider',
+      riderName: riderName ?? 'Demo Rider',
+    })
+    setScreen('ticket-accepted')
+  }
+
   return (
     <div className="pb-4">
       <div className="flex items-center justify-between mb-3 pt-1">
@@ -933,10 +954,20 @@ function B1Content({ setScreen }: { setScreen: (s: RiderScreen) => void }) {
         ))}
       </div>
       <div className="space-y-3">
-        <TicketRequestCard detour="0.6 km" onView={() => setScreen('ticket-detail')} onAccept={() => setScreen('ticket-accepted')} onDecline={() => {}} />
-        <TicketRequestCard detour="1.1 km" onView={() => setScreen('ticket-detail')} onAccept={() => setScreen('ticket-accepted')} onDecline={() => {}} />
-        <TicketRequestCard detour="0.4 km" onView={() => setScreen('ticket-detail')} onAccept={() => setScreen('ticket-accepted')} onDecline={() => {}} />
-        <TicketRequestCard detour="1.8 km" onView={() => setScreen('ticket-detail')} onAccept={() => setScreen('ticket-accepted')} onDecline={() => {}} />
+        {tickets.length === 0 ? (
+          <p style={{ fontSize: 13, color: '#98A2B3', textAlign: 'center', padding: '24px 0' }}>No open tickets right now</p>
+        ) : (
+          tickets.map(ticket => (
+            <TicketRequestCard
+              key={ticket.id}
+              ticket={ticket}
+              detour={`${(Math.random() * 1.5 + 0.3).toFixed(1)} km`}
+              onView={() => setScreen('ticket-detail')}
+              onAccept={() => handleAccept(ticket)}
+              onDecline={() => {}}
+            />
+          ))
+        )}
       </div>
     </div>
   )
@@ -1383,9 +1414,11 @@ interface RiderContentProps {
   screen: RiderScreen
   setScreen: (s: RiderScreen) => void
   onSOS?: () => void
+  riderUid?: string | null
+  riderName?: string | null
 }
 
-export default function RiderContent({ screen, setScreen, onSOS }: RiderContentProps) {
+export default function RiderContent({ screen, setScreen, onSOS, riderUid, riderName }: RiderContentProps) {
   const [vehicleType, setVehicleType] = useState<'bike' | 'scooter'>('bike')
   const [model, setModel] = useState('')
   const [regNum, setRegNum] = useState('')
@@ -1430,7 +1463,7 @@ export default function RiderContent({ screen, setScreen, onSOS }: RiderContentP
           detour={detour} setDetour={setDetour} riderWomenOnly={riderWomenOnly} setRiderWomenOnly={setRiderWomenOnly}
           postDays={postDays} setPostDays={setPostDays} />
       )}
-      {screen === 'tickets-list' && <B1Content setScreen={setScreen} />}
+      {screen === 'tickets-list' && <B1Content setScreen={setScreen} riderUid={riderUid} riderName={riderName} />}
       {screen === 'tickets-empty' && <B2Content setScreen={setScreen} />}
       {screen === 'ticket-detail' && <B3Content setScreen={setScreen} />}
       {screen === 'ticket-accepted' && <B4Content setScreen={setScreen} />}

@@ -692,9 +692,13 @@ export default function App() {
     if (authLoading || !firebaseReady) return
 
     if (!user) {
-      // Not signed in → onboarding
-      setAppSection('onboarding')
-      setOnboardingScreen('splash-intro')
+      // Not signed in → onboarding.
+      // Guard: only reset when coming from an app section (actual sign-out),
+      // not on every onboardingScreen change (which would loop the splash).
+      if (appSection !== 'onboarding') {
+        setAppSection('onboarding')
+        setOnboardingScreen('splash-intro')
+      }
       return
     }
 

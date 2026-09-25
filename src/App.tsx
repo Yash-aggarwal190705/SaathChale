@@ -666,7 +666,7 @@ function RiderBottomNav({ active, setActive }: { active: string; setActive: (s: 
 // ── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { user, loading: authLoading, firebaseReady } = useAuth()
+  const { user, loading: authLoading, profileLoading, firebaseReady } = useAuth()
   const [appSection, setAppSection] = useState<'onboarding' | 'customer' | 'rider' | 'common'>('onboarding')
   const [onboardingScreen, setOnboardingScreen] = useState<OnboardingScreen>('splash-intro')
   const [commonScreen, setCommonScreen] = useState<CommonScreen>('profile')
@@ -694,7 +694,10 @@ export default function App() {
   // Restores sessions on load and auto-navigates after sign-in. Prototype mode
   // (no .env) keeps the original manual state-based navigation untouched.
   useEffect(() => {
-    if (authLoading || !firebaseReady) return
+    // Never route while Firebase is still restoring the session OR while the
+    // authenticated user's Firestore profile is still loading — otherwise a
+    // signed-in user can be briefly seen as "no profile" / logged out.
+    if (authLoading || profileLoading || !firebaseReady) return
 
     if (!user) {
       // Not signed in → onboarding.
@@ -735,7 +738,7 @@ export default function App() {
       if (primaryRole === 'rider') setRiderScreen('rider-home-idle')
       else setCustomerScreen('idle')
     }
-  }, [authLoading, user, firebaseReady, appSection])
+  }, [authLoading, profileLoading, user, firebaseReady, appSection])
 
   // ── Verification gate (task 1.7) ──────────────────────────────────────────
   // Unverified users can browse but cannot raise tickets. In prototype mode
@@ -821,7 +824,7 @@ export default function App() {
 
   // Show a loading screen while Firebase restores the session so the
   // onboarding splash is never flashed to an already-authenticated user.
-  if (authLoading && firebaseReady) {
+  if ((authLoading || profileLoading) && firebaseReady) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-6" style={{ background: '#0d0d1a' }}>
         <div className="relative overflow-hidden flex-shrink-0"

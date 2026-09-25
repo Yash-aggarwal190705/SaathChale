@@ -52,6 +52,8 @@ export interface UserProfile {
 interface AuthContextValue {
   user: UserProfile | null
   loading: boolean
+  /** True while the authenticated user's Firestore profile doc is being fetched. */
+  profileLoading: boolean
   firebaseReady: boolean
   // ── Auth actions ──
   signUp: (email: string, password: string) => Promise<void>
@@ -95,6 +97,7 @@ function firebaseUserToProfile(fbUser: FirebaseUser, docData?: FirestoreUserProf
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [profileLoading, setProfileLoading] = useState(false)
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null)
   const confirmationRef = useRef<ConfirmationResult | null>(null)
 
@@ -105,17 +108,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        try {
-          const docData = await getUserDocument(fbUser.uid)
-          setUser(firebaseUserToProfile(fbUser, docData))
-        } catch {
-          setUser(firebaseUserToProfile(fbUser))
-        }
-      } else {
+      if (!fbUser) {
         setUser(null)
+        setLoading(false)
+        setProfileLoading(false)
+        return
       }
+
+      console.info('[AuthContext] auth state: signed in', { uid: fbUser.uid, email: fbUser.email })
+
+      // Reflect the authenticated Firebase user IMMEDIATELY so routing never
+      // bounces a signed-in user back to the login screen while the Firestore
+      // profile doc is still being fetched.
+      setUser(firebaseUserToProfile(fbUser))
       setLoading(false)
+
+      // Then merge in the Firestore profile (best-effort; separate state).
+      const uid = fbUser.uid
+      setProfileLoading(true)
+      try {
+        const docData = await getUserDocument(uid)
+        // Guard against a stale response if the user signed out meanwhile.
+        if (auth?.currentUser?.uid === uid) {
+          setUser(firebaseUserToProfile(fbUser, docData))
+        }
+      } catch {
+        /* keep the Firebase-only profile; user stays authenticated */
+      } finally {
+        if (auth?.currentUser?.uid === uid) setProfileLoading(false)
+      }
     })
     return unsubscribe
   }, [])
@@ -136,14 +157,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) return
     const provider = new GoogleAuthProvider()
     const cred = await signInWithPopup(auth, provider)
-    await createUserDocument(cred.user.uid, {
-      name: cred.user.displayName ?? '',
-      email: cred.user.email ?? '',
-    })
-    // Re-read the profile so user state reflects the freshly-created doc.
-    // onAuthStateChanged may have fired before the doc was written.
-    const docData = await getUserDocument(cred.user.uid)
-    setUser(firebaseUserToProfile(cred.user, docData))
+    console.info('[AuthContext] Google sign-in succeeded', { uid: cred.user.uid, email: cred.user.email })
+
+    // Reflect the authenticated user IMMEDIATELY. The Firestore bootstrap below
+    // is best-effort: it must never throw and bounce the user back to the
+    // login screen after a successful authentication.
+    setUser(firebaseUserToProfile(cred.user))
+    setLoading(false)
+
+    try {
+      await createUserDocument(cred.user.uid, {
+        name: cred.user.displayName ?? '',
+        email: cred.user.email ?? '',
+      })
+      // Re-read the profile so user state reflects the freshly-created doc.
+      // onAuthStateChanged may have fired before the doc was written.
+      const docData = await getUserDocument(cred.user.uid)
+      setUser(firebaseUserToProfile(cred.user, docData))
+    } catch (err) {
+      // Auth is still valid; profile doc will be created on the next save.
+      console.warn('[AuthContext] profile bootstrap after Google sign-in failed:', err)
+    }
   }, [])
 
   // ── Phone auth helpers ──
@@ -246,6 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
+        profileLoading,
         firebaseReady: isFirebaseConfigured,
         signUp,
         signIn,

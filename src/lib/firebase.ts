@@ -10,7 +10,7 @@
 
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
-import { getFirestore, type Firestore } from 'firebase/firestore'
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore'
 import { getDatabase, type Database } from 'firebase/database'
 import { getStorage, type FirebaseStorage } from 'firebase/storage'
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging'
@@ -46,7 +46,23 @@ let messaging: Messaging | null = null
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
-  db = getFirestore(app)
+  // Initialize Firestore with an IndexedDB-backed persistent cache when the
+  // browser supports it. This lets reads/writes degrade gracefully (serve from
+  // cache) instead of failing with "client is offline" on a transient network
+  // blip, and restores the session/profile from cache on refresh. Falls back to
+  // the default in-memory instance when IndexedDB is unavailable (e.g. some
+  // sandboxed preview environments).
+  if (typeof indexedDB !== 'undefined') {
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      })
+    } catch {
+      db = getFirestore(app)
+    }
+  } else {
+    db = getFirestore(app)
+  }
   if (firebaseConfig.databaseURL) {
     rtdb = getDatabase(app)
   }

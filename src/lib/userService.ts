@@ -5,7 +5,7 @@
 // so the prototype continues to work without a .env file.
 
 import {
-  doc, getDoc, setDoc, updateDoc, serverTimestamp,
+  doc, getDoc, getDocFromCache, setDoc, serverTimestamp, runTransaction,
 } from 'firebase/firestore'
 import {
   ref, uploadBytes, getDownloadURL,
@@ -48,24 +48,34 @@ export async function createUserDocument(
   data: { name: string; email: string },
 ): Promise<void> {
   if (!isFirebaseConfigured || !db) return
+  if (!uid) return
 
   const userRef = doc(db, 'users', uid)
-  const existing = await getDoc(userRef)
-  if (existing.exists()) return // already created
-
-  await setDoc(userRef, {
-    name: data.name || '',
-    email: data.email,
-    phone: '',
-    photoUrl: '',
-    area: '',
-    collegeIdUrl: '',
-    verificationStatus: 'none',
-    roles: [],
-    ratingAvg: 0,
-    ratingCount: 0,
-    createdAt: serverTimestamp(),
-  })
+  try {
+    // Transaction = atomic read-then-create, avoiding the read/write race and
+    // never clobbering an existing profile.
+    await runTransaction(db, async (tx) => {
+      const existing = await tx.get(userRef)
+      if (existing.exists()) return // already created
+      tx.set(userRef, {
+        name: data.name || '',
+        email: data.email,
+        phone: '',
+        photoUrl: '',
+        area: '',
+        collegeIdUrl: '',
+        verificationStatus: 'none',
+        roles: [],
+        ratingAvg: 0,
+        ratingCount: 0,
+        createdAt: serverTimestamp(),
+      })
+    })
+  } catch (err) {
+    // Never let profile-document creation block a successful sign-in.
+    // The doc is created lazily on the next profile save (setDoc merge).
+    console.warn('[userService] createUserDocument skipped (auth still valid):', err)
+  }
 }
 
 /**
@@ -73,14 +83,23 @@ export async function createUserDocument(
  */
 export async function getUserDocument(uid: string): Promise<FirestoreUserProfile | null> {
   if (!isFirebaseConfigured || !db) return null
+  if (!uid) return null
 
+  const userRef = doc(db, 'users', uid)
   try {
-    const userRef = doc(db, 'users', uid)
     const snap = await getDoc(userRef)
     if (!snap.exists()) return null
     return snap.data() as FirestoreUserProfile
   } catch (err) {
     console.error('[userService] getUserDocument failed:', err)
+    // Fall back to the local cache (present when offline persistence is on),
+    // so an "offline" error doesn't get mistaken for "no profile exists".
+    try {
+      const cached = await getDocFromCache(userRef)
+      if (cached.exists()) return cached.data() as FirestoreUserProfile
+    } catch {
+      /* no cached copy available */
+    }
     return null
   }
 }
@@ -93,10 +112,14 @@ export async function updateUserDocument(
   fields: ProfileUpdateFields,
 ): Promise<void> {
   if (!isFirebaseConfigured || !db) return
+  if (!uid) return
 
   try {
     const userRef = doc(db, 'users', uid)
-    await updateDoc(userRef, fields as Record<string, unknown>)
+    // setDoc with merge creates the doc if it's missing (self-heals when the
+    // initial createUserDocument was skipped offline) and only touches the
+    // provided fields.
+    await setDoc(userRef, fields as Record<string, unknown>, { merge: true })
   } catch (err) {
     console.error('[userService] updateUserDocument failed:', err)
     throw err

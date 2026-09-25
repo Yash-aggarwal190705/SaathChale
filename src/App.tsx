@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Map, { type MapMode } from './components/Map'
 import RiderContent, {
   RIDER_SHEET_CONFIG, RIDER_HIDE_TOPBAR, RIDER_SHOW_NAV, type RiderScreen,
@@ -685,6 +685,11 @@ export default function App() {
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null)
   const [isRaisingTicket, setIsRaisingTicket] = useState(false)
 
+  // Ref to read onboardingScreen inside the routing effect without adding it
+  // to the dependency array (prevents the splash-reset loop).
+  const onboardingScreenRef = useRef(onboardingScreen)
+  onboardingScreenRef.current = onboardingScreen
+
   // ── Auth-based routing ─────────────────────────────────────────────────────
   // Restores sessions on load and auto-navigates after sign-in. Prototype mode
   // (no .env) keeps the original manual state-based navigation untouched.
@@ -702,14 +707,27 @@ export default function App() {
       return
     }
 
-    if (!user.roles || user.roles.length === 0) return
+    const screen = onboardingScreenRef.current
+
+    // Authenticated but no roles yet → skip splash/auth, go to profile setup.
+    if (!user.roles || user.roles.length === 0) {
+      if (
+        appSection === 'onboarding' &&
+        (screen === 'splash-intro' || screen === 'splash-1' ||
+         screen === 'splash-2' || screen === 'splash-3' ||
+         screen === 'auth' || screen === 'email-sent')
+      ) {
+        setOnboardingScreen('profile')
+      }
+      return
+    }
 
     // Signed in with a role → leave onboarding, unless the user is mid-way
     // through the role-selection steps (choose-role → role-confirmed).
     if (
       appSection === 'onboarding' &&
-      onboardingScreen !== 'choose-role' &&
-      onboardingScreen !== 'role-confirmed'
+      screen !== 'choose-role' &&
+      screen !== 'role-confirmed'
     ) {
       const primaryRole = user.roles[0] as 'customer' | 'rider'
       setRole(primaryRole)
@@ -717,7 +735,7 @@ export default function App() {
       if (primaryRole === 'rider') setRiderScreen('rider-home-idle')
       else setCustomerScreen('idle')
     }
-  }, [authLoading, user, firebaseReady, appSection, onboardingScreen])
+  }, [authLoading, user, firebaseReady, appSection])
 
   // ── Verification gate (task 1.7) ──────────────────────────────────────────
   // Unverified users can browse but cannot raise tickets. In prototype mode
@@ -800,6 +818,22 @@ export default function App() {
     outline: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
     appearance: 'none' as const, WebkitAppearance: 'none' as const,
   })
+
+  // Show a loading screen while Firebase restores the session so the
+  // onboarding splash is never flashed to an already-authenticated user.
+  if (authLoading && firebaseReady) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-6" style={{ background: '#0d0d1a' }}>
+        <div className="relative overflow-hidden flex-shrink-0"
+          style={{ width: 390, height: 844, borderRadius: 44, background: '#F7F8FA',
+            boxShadow: '0 0 0 11px #1c1c2e, 0 0 0 13px #2e2e42, 0 40px 100px rgba(0,0,0,0.7)' }}>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-sm font-semibold" style={{ color: '#667085' }}>Loading…</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-6" style={{ background: '#0d0d1a' }}>

@@ -140,6 +140,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: cred.user.displayName ?? '',
       email: cred.user.email ?? '',
     })
+    // Re-read the profile so user state reflects the freshly-created doc.
+    // onAuthStateChanged may have fired before the doc was written.
+    const docData = await getUserDocument(cred.user.uid)
+    setUser(firebaseUserToProfile(cred.user, docData))
   }, [])
 
   // ── Phone auth helpers ──

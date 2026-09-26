@@ -97,6 +97,10 @@ function firebaseUserToProfile(fbUser: FirebaseUser, docData?: FirestoreUserProf
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // When a demo account is active, suppress onAuthStateChanged from clearing
+  // the user state (there is no real Firebase session behind demo logins).
+  const demoModeRef = useRef(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null)
   const confirmationRef = useRef<ConfirmationResult | null>(null)
@@ -108,6 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      // Skip Firebase auth-state reactions while a demo account is active.
+      if (demoModeRef.current) return
+
       if (!fbUser) {
         setUser(null)
         setLoading(false)
@@ -226,8 +233,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOutUser = useCallback(async () => {
+    demoModeRef.current = false
+    setUser(null)
     if (!auth) return
-    await firebaseSignOut(auth)
+    try { await firebaseSignOut(auth) } catch { /* no active session */ }
   }, [])
 
   const resendVerification = useCallback(async () => {
@@ -275,6 +284,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => (prev ? { ...prev, role } : null))
   }, [])
 
+  /** Wrapped setUser that activates/deactivates demo mode automatically. */
+  const setUserWithDemo = useCallback((u: UserProfile | null) => {
+    demoModeRef.current = u !== null && u.uid.startsWith('demo-')
+    if (demoModeRef.current) setProfileLoading(false)
+    setUser(u)
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -294,7 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateProfile,
         setRoles,
         setRole,
-        setUser,
+        setUser: setUserWithDemo,
       }}
     >
       {children}

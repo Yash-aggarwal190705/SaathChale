@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from './context/AuthContext'
 import { uploadCollegeId, uploadProfilePhoto } from './lib/userService'
+import { DEMO_ACCOUNTS, type DemoAccount } from './lib/demoData'
 
 export type OnboardingScreen =
   | 'splash-intro' | 'splash-1' | 'splash-2' | 'splash-3'
@@ -588,12 +589,29 @@ function SplashScreen({ slide, onNext, onSkip }: { slide: 1 | 2 | 3; onNext: () 
 }
 
 function AuthScreen({ onContinue, onSignedIn }: { onContinue: () => void; onSignedIn: () => void }) {
-  const { signUp, signIn, signInWithGoogle, checkEmailVerified, firebaseReady } = useAuth()
+  const { signUp, signIn, signInWithGoogle, checkEmailVerified, firebaseReady, setUser } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'signup' | 'signin'>('signup')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  /** Instantly logs in as a demo account (no Firebase call needed). */
+  const handleDemoLogin = (acct: DemoAccount) => {
+    setUser({
+      uid: acct.id,
+      email: acct.email,
+      name: acct.name,
+      phone: acct.phone,
+      area: acct.area,
+      photoUrl: null,
+      role: (acct.roles[0] as 'customer' | 'rider') ?? null,
+      roles: acct.roles,
+      verificationStatus: acct.verificationStatus,
+      emailVerified: true,
+    })
+    onSignedIn()
+  }
 
   const handleSubmit = async () => {
     if (!email.includes('@') || password.length < 6) return
@@ -659,6 +677,37 @@ function AuthScreen({ onContinue, onSignedIn }: { onContinue: () => void; onSign
           </button>
           <Divider />
           <GoogleButton onClick={handleGoogle} />
+
+          {/* ── Demo Accounts (competition MVP) ── */}
+          <div style={{ marginTop: 12 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#344054', marginBottom: 8, textAlign: 'center' }}>
+              Quick Demo Logins
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {DEMO_ACCOUNTS.map((acct) => (
+                <button
+                  key={acct.id}
+                  onClick={() => handleDemoLogin(acct)}
+                  disabled={busy}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 10,
+                    border: '1.5px solid #E4E7EC',
+                    background: '#FAFBFC',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    opacity: busy ? 0.5 : 1,
+                    transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#3B5BDB' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#E4E7EC' }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#101828', display: 'block' }}>{acct.name}</span>
+                  <span style={{ fontSize: 10, color: '#667085' }}>{acct.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
       <div className="py-6 text-center flex-shrink-0">

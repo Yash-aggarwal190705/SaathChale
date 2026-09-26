@@ -29,3 +29,79 @@ export const DEMO_LOCATIONS: DemoLocation[] = [
 export const DEFAULT_PICKUP = DEMO_LOCATIONS[3] // Home — Malviya Nagar
 /** Default drop for customer home */
 export const DEFAULT_DROP = DEMO_LOCATIONS[0] // VGU Main Gate
+
+// ── Demo Accounts (competition MVP) ─────────────────────────────────────────
+
+export interface DemoAccount {
+  id: string
+  name: string
+  email: string
+  phone: string
+  area: string
+  roles: string[]
+  verificationStatus: 'none' | 'pending' | 'verified' | 'rejected'
+  label: string // short description shown in the login screen
+}
+
+export const DEMO_ACCOUNTS: DemoAccount[] = [
+  {
+    id: 'demo-priya',
+    name: 'Priya Sharma',
+    email: 'priya@vgu.ac.in',
+    phone: '+91 98290 12345',
+    area: 'Malviya Nagar',
+    roles: ['customer'],
+    verificationStatus: 'verified',
+    label: 'Verified Customer',
+  },
+  {
+    id: 'demo-arjun',
+    name: 'Arjun Mehta',
+    email: 'arjun@vgu.ac.in',
+    phone: '+91 98290 23456',
+    area: 'Jagatpura',
+    roles: ['rider'],
+    verificationStatus: 'verified',
+    label: 'Verified Rider',
+  },
+  {
+    id: 'demo-sneha',
+    name: 'Sneha Gupta',
+    email: 'sneha@vgu.ac.in',
+    phone: '+91 98290 34567',
+    area: 'Mansarovar',
+    roles: ['customer', 'rider'],
+    verificationStatus: 'verified',
+    label: 'Customer + Rider',
+  },
+  {
+    id: 'demo-rohan',
+    name: 'Rohan Patel',
+    email: 'rohan@vgu.ac.in',
+    phone: '+91 98290 45678',
+    area: 'Tonk Road',
+    roles: ['customer'],
+    verificationStatus: 'pending',
+    label: 'Pending Verification',
+  },
+  {
+    id: 'demo-kavya',
+    name: 'Kavya Singh',
+    email: 'kavya@vgu.ac.in',
+    phone: '+91 98290 56789',
+    area: 'Vaishali Nagar',
+    roles: ['rider'],
+    verificationStatus: 'verified',
+    label: 'Rider (Women)',
+  },
+  {
+    id: 'demo-aditya',
+    name: 'Aditya Joshi',
+    email: 'aditya@vgu.ac.in',
+    phone: '+91 98290 67890',
+    area: 'C-Scheme',
+    roles: ['customer'],
+    verificationStatus: 'none',
+    label: 'New User (No Roles)',
+  },
+]

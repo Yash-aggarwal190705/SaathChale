@@ -286,7 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** Wrapped setUser that activates/deactivates demo mode automatically. */
   const setUserWithDemo = useCallback((u: UserProfile | null) => {
-    demoModeRef.current = u !== null && u.uid.startsWith('demo-')
+    demoModeRef.current = u !== null && (u.uid ?? '').startsWith('demo-')
     if (demoModeRef.current) setProfileLoading(false)
     setUser(u)
   }, [])

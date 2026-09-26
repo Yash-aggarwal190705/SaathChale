@@ -618,6 +618,13 @@ function AuthScreen({ onContinue, onSignedIn }: { onContinue: () => void; onSign
     setBusy(true)
     setError('')
     try {
+      // Check if the email matches a demo account — bypass Firebase entirely
+      const demoMatch = DEMO_ACCOUNTS.find(a => a.email.toLowerCase() === email.trim().toLowerCase())
+      if (demoMatch) {
+        handleDemoLogin(demoMatch)
+        return
+      }
+
       if (firebaseReady) {
         if (mode === 'signup') {
           await signUp(email, password)

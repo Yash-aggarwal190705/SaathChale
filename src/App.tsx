@@ -7,12 +7,22 @@ import OnboardingContent, { ALL_ONBOARDING_SCREENS, type OnboardingScreen } from
 import CommonContent, { ALL_COMMON_SCREENS, type CommonScreen } from './CommonFlow'
 import SOSContent, { type SOSScreen } from './SOSFlow'
 import { useAuth } from './context/AuthContext'
+import { useRide, type RideStatus, type RideTicket } from './context/RideContext'
 import { createTicket, cancelTicket, subscribeToTicket, type Ticket } from './lib/ticketService'
-import { DEFAULT_PICKUP, DEFAULT_DROP } from './lib/demoData'
+import { DEFAULT_PICKUP, DEFAULT_DROP, DEMO_LOCATIONS } from './lib/demoData'
 
 type CustomerScreen =
   | 'idle' | 'searching' | 'ticket-form' | 'waiting'
   | 'rider-accepted' | 'rider-arriving' | 'ride-in-progress'
+
+// Map RideStatus → CustomerScreen for auto-navigation
+const STATUS_TO_SCREEN: Partial<Record<RideStatus, CustomerScreen>> = {
+  searching: 'searching',
+  waiting: 'waiting',
+  rider_accepted: 'rider-accepted',
+  rider_arriving: 'rider-arriving',
+  in_progress: 'ride-in-progress',
+}
 
 // ── Map mode derivation ──────────────────────────────────────────────────────
 
@@ -250,40 +260,50 @@ function OTPCard() {
 
 // ── Customer screen content ──────────────────────────────────────────────────
 
-function IdleContent({ onSearch }: { onSearch: () => void }) {
+function IdleContent({ onSearch, ticket, onUpcomingTap }: {
+  onSearch: (prefillDrop?: string) => void
+  ticket: RideTicket | null
+  onUpcomingTap: () => void
+}) {
   return (
     <div className="space-y-3">
       <button className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[10px] text-left transition-all active:scale-[0.99]"
-        style={{ background: '#F7F8FA', border: '1.5px solid #E4E7EC', color: '#98A2B3' }} onClick={onSearch}>
+        style={{ background: '#F7F8FA', border: '1.5px solid #E4E7EC', color: '#98A2B3' }} onClick={() => onSearch()}>
         <SearchIcon />
         <span style={{ fontSize: 14, color: '#98A2B3' }}>Where to?</span>
       </button>
       <div className="flex gap-2 flex-wrap">
-        {[{ emoji: '🏠', label: 'Home' }, { emoji: '🎓', label: 'College' }].map(c => (
+        {[
+          { emoji: '🏠', label: 'Home', drop: DEFAULT_PICKUP.label },
+          { emoji: '🎓', label: 'College', drop: DEFAULT_DROP.label },
+        ].map(c => (
           <button key={c.label}
             className="flex items-center gap-2 px-3.5 py-2 rounded-full"
             style={{ background: '#F2F4F7', border: '1px solid #E4E7EC', fontSize: 13, fontWeight: 500, color: '#344054' }}
-            onClick={onSearch}>
+            onClick={() => onSearch(c.drop)}>
             <span style={{ fontSize: 15 }}>{c.emoji}</span>{c.label}
           </button>
         ))}
       </div>
-      <div className="rounded-[12px] overflow-hidden" style={{ border: '1.5px solid #E4E7EC' }}>
-        <div className="flex items-center gap-2 px-3.5 py-2.5"
-          style={{ background: '#F7F8FA', borderBottom: '1px solid #E4E7EC' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#98A2B3', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Upcoming</span>
-        </div>
-        <div className="px-3.5 py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#101828' }}>Tomorrow, 8:15 AM</p>
-              <p style={{ fontSize: 12, color: '#667085', marginTop: 2 }}>Mansarovar → VGU Jaipur</p>
-              <p style={{ fontSize: 11, color: '#98A2B3', marginTop: 4 }}>₹40 fuel share · Mon–Fri</p>
-            </div>
-            <PillStatus status="pending" />
+      {ticket && (
+        <button onClick={onUpcomingTap} className="w-full text-left rounded-[12px] overflow-hidden transition-all active:scale-[0.99]"
+          style={{ border: '1.5px solid #E4E7EC' }}>
+          <div className="flex items-center gap-2 px-3.5 py-2.5"
+            style={{ background: '#F7F8FA', borderBottom: '1px solid #E4E7EC' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#98A2B3', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Upcoming</span>
           </div>
-        </div>
-      </div>
+          <div className="px-3.5 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#101828' }}>{ticket.date}, {ticket.time}</p>
+                <p style={{ fontSize: 12, color: '#667085', marginTop: 2 }}>{ticket.pickup} → {ticket.drop}</p>
+                <p style={{ fontSize: 11, color: '#98A2B3', marginTop: 4 }}>₹{ticket.fare} total{ticket.isRecurring ? ` · ${ticket.recurringDays.join('–')}` : ' · one-time'}</p>
+              </div>
+              <PillStatus status={ticket.status === 'rider_accepted' || ticket.status === 'rider_arriving' ? 'rider-found' : ticket.status === 'in_progress' ? 'on-the-way' : 'pending'} />
+            </div>
+          </div>
+        </button>
+      )}
     </div>
   )
 }
@@ -461,11 +481,43 @@ function WaitingContent({ onCancel, onRiderFound, ticket }: { onCancel: () => vo
   )
 }
 
-function RiderAcceptedContent({ onRideDay, onCancel }: { onRideDay: () => void; onCancel: () => void }) {
+function RiderAcceptedContent({ onRideDay, onCancel, ticket }: { onRideDay: () => void; onCancel: () => void; ticket?: RideTicket | null }) {
+  const [toast, setToast] = useState<string | null>(null)
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2000) }
+  const rider = ticket?.rider
   return (
     <div className="space-y-3 pb-2">
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full"
+          style={{ background: '#101828', color: 'white', fontSize: 12, fontWeight: 600 }}>{toast}</div>
+      )}
       <PillStatus status="rider-found" />
-      <RiderCard />
+      {rider ? (
+        <div className="flex items-center gap-3 p-3.5 rounded-[12px]" style={{ border: '1.5px solid #E4E7EC' }}>
+          <div className="rounded-full flex-shrink-0 flex items-center justify-center"
+            style={{ width: 48, height: 48, background: '#EDF1FF' }}>
+            <span style={{ fontSize: 17, fontWeight: 700, color: '#3451B2' }}>{rider.name.split(' ').map(w => w[0]).join('')}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#101828' }}>{rider.name}</span>
+              <VerifiedBadge />
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <StarIcon />
+              <span style={{ fontSize: 11, color: '#667085', fontWeight: 500 }}>{rider.rating}</span>
+              <span style={{ fontSize: 11, color: '#D0D5DD', margin: '0 2px' }}>·</span>
+              <span style={{ fontSize: 11, color: '#667085' }}>{rider.vehicle}</span>
+            </div>
+            <p style={{ fontSize: 11, color: '#98A2B3', marginTop: 1 }}>ETA: ~{rider.etaMinutes} min</p>
+          </div>
+          <button onClick={() => showToast('Calling feature coming soon')}
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: '#ECFDF3', color: '#027A48' }}>
+            <PhoneCallIcon />
+          </button>
+        </div>
+      ) : <RiderCard />}
       <div className="rounded-[12px] overflow-hidden" style={{ border: '1.5px solid #E4E7EC' }}>
         <div className="flex items-center gap-3 px-3.5 py-3" style={{ borderBottom: '1px solid #F2F4F7' }}>
           <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#ECFDF3' }}>
@@ -473,19 +525,24 @@ function RiderAcceptedContent({ onRideDay, onCancel }: { onRideDay: () => void; 
           </div>
           <div className="flex-1">
             <p style={{ fontSize: 11, color: '#98A2B3' }}>Pickup point</p>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>Mansarovar Metro, Gate 2</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#101828' }}>{ticket?.pickup ?? 'Mansarovar Metro, Gate 2'}</p>
           </div>
           <div className="text-right">
             <p style={{ fontSize: 11, color: '#98A2B3' }}>Arrive by</p>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#101828' }}>8:15 AM</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#101828' }}>{ticket?.time ?? '8:15 AM'}</p>
           </div>
         </div>
         <div className="flex items-center justify-between px-3.5 py-3">
           <span style={{ fontSize: 13, color: '#667085' }}>Fuel share</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#101828' }}>₹40</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#101828' }}>₹{ticket?.fuelShare ?? 40}</span>
         </div>
       </div>
       <div className="flex gap-2">
+        <button onClick={() => showToast('Chat coming soon')}
+          className="flex-1 py-3.5 rounded-[12px] flex items-center justify-center gap-1.5"
+          style={{ border: '1.5px solid #E4E7EC', fontSize: 13, fontWeight: 600, color: '#344054' }}>
+          💬 Chat
+        </button>
         <button onClick={onCancel}
           className="flex-1 py-3.5 rounded-[12px] flex items-center justify-center gap-1.5"
           style={{ border: '1.5px solid #FDA29B', fontSize: 13, fontWeight: 600, color: '#B42318' }}>
@@ -499,13 +556,14 @@ function RiderAcceptedContent({ onRideDay, onCancel }: { onRideDay: () => void; 
   )
 }
 
-function RiderArrivingContent({ onStartRide, onSOS }: { onStartRide: () => void; onSOS?: () => void }) {
+function RiderArrivingContent({ onStartRide, onSOS, ticket }: { onStartRide: () => void; onSOS?: () => void; ticket?: RideTicket | null }) {
+  const eta = ticket?.rider?.etaMinutes ?? 4
   return (
     <div className="space-y-3 pb-2">
       <div className="flex items-center justify-between">
         <div>
           <p style={{ fontSize: 12, color: '#98A2B3' }}>Your rider</p>
-          <p style={{ fontSize: 20, fontWeight: 700, color: '#101828', letterSpacing: '-0.5px' }}>Arrives in 4 min</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: '#101828', letterSpacing: '-0.5px' }}>Arrives in {eta} min</p>
         </div>
         <PillStatus status="on-the-way" />
       </div>
@@ -525,18 +583,18 @@ function RiderArrivingContent({ onStartRide, onSOS }: { onStartRide: () => void;
   )
 }
 
-function RideInProgressContent({ onEnd, onSOS }: { onEnd: () => void; onSOS: () => void }) {
+function RideInProgressContent({ onEnd, onSOS, ticket }: { onEnd: () => void; onSOS: () => void; ticket?: RideTicket | null }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <p style={{ fontSize: 12, color: '#98A2B3' }}>Heading to</p>
-          <p style={{ fontSize: 18, fontWeight: 700, color: '#101828', letterSpacing: '-0.4px' }}>VGU Jaipur</p>
-          <p style={{ fontSize: 12, color: '#667085', marginTop: 1 }}>8:43 AM arrival · 6.4 km left</p>
+          <p style={{ fontSize: 18, fontWeight: 700, color: '#101828', letterSpacing: '-0.4px' }}>{ticket?.drop ?? 'VGU Jaipur'}</p>
+          <p style={{ fontSize: 12, color: '#667085', marginTop: 1 }}>{ticket ? `${ticket.distanceKm} km · ₹${ticket.fare}` : '8:43 AM arrival · 6.4 km left'}</p>
         </div>
         <div className="text-right">
-          <p style={{ fontSize: 28, fontWeight: 800, color: '#3B5BDB', letterSpacing: '-1px', lineHeight: 1 }}>24</p>
-          <p style={{ fontSize: 11, color: '#98A2B3', fontWeight: 500 }}>min</p>
+          <p style={{ fontSize: 28, fontWeight: 800, color: '#3B5BDB', letterSpacing: '-1px', lineHeight: 1 }}>₹{ticket?.fare ?? 40}</p>
+          <p style={{ fontSize: 11, color: '#98A2B3', fontWeight: 500 }}>fare</p>
         </div>
       </div>
       <div className="flex gap-2">
@@ -581,7 +639,7 @@ function StatusBar() {
   )
 }
 
-function TopBar({ role, onSwitch, onNotif }: { role: 'customer' | 'rider'; onSwitch: () => void; onNotif?: () => void }) {
+function TopBar({ role, onSwitch, onNotif, hasUnreadNotif = false }: { role: 'customer' | 'rider'; onSwitch: () => void; onNotif?: () => void; hasUnreadNotif?: boolean }) {
   return (
     <div className="absolute top-11 left-0 right-0 flex items-center justify-between px-4 pt-3 pb-2 z-20">
       <button className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0"
@@ -608,7 +666,7 @@ function TopBar({ role, onSwitch, onNotif }: { role: 'customer' | 'rider'; onSwi
       <button onClick={onNotif} className="w-10 h-10 rounded-full flex items-center justify-center relative flex-shrink-0"
         style={{ background: 'white', boxShadow: '0 2px 8px rgba(16,24,40,0.18)' }}>
         <BellIcon />
-        <div className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: '#E5484D', border: '1.5px solid white' }} />
+        {hasUnreadNotif && <div className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: '#E5484D', border: '1.5px solid white' }} />}
       </button>
     </div>
   )
@@ -667,6 +725,12 @@ function RiderBottomNav({ active, setActive }: { active: string; setActive: (s: 
 
 export default function App() {
   const { user, loading: authLoading, profileLoading, firebaseReady } = useAuth()
+  const {
+    ticket: rideTicket, notifications: rideNotifications,
+    createRideTicket, cancelRide, simulateRiderAccept, simulateRiderArrive,
+    startRide, completeRide, markNotificationsRead, clearNotifications,
+    hasActiveTicket,
+  } = useRide()
   const [appSection, setAppSection] = useState<'onboarding' | 'customer' | 'rider' | 'common'>('onboarding')
   const [onboardingScreen, setOnboardingScreen] = useState<OnboardingScreen>('splash-intro')
   const [commonScreen, setCommonScreen] = useState<CommonScreen>('profile')
@@ -740,6 +804,15 @@ export default function App() {
     }
   }, [authLoading, profileLoading, user, firebaseReady, appSection])
 
+  // ── Auto-navigation: sync customerScreen with ride ticket status ──────────
+  useEffect(() => {
+    if (!rideTicket) return
+    const target = STATUS_TO_SCREEN[rideTicket.status]
+    if (target && appSection === 'customer') {
+      setCustomerScreen(target)
+    }
+  }, [rideTicket?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Verification gate (task 1.7) ──────────────────────────────────────────
   // Unverified users can browse but cannot raise tickets. In prototype mode
   // (no Firebase) everything stays unlocked.
@@ -757,7 +830,7 @@ export default function App() {
     return unsub
   }, [activeTicketId, customerScreen])
 
-  const handleCustomerSearch = () => {
+  const handleCustomerSearch = (prefillDrop?: string) => {
     if (!isVerified) {
       setAppSection('onboarding')
       setOnboardingScreen(
@@ -765,8 +838,16 @@ export default function App() {
       )
       return
     }
-    setCustomerScreen('searching')
+    setCustomerScreen('ticket-form')
   }
+
+  const handleUpcomingTap = () => {
+    if (!rideTicket) return
+    const target = STATUS_TO_SCREEN[rideTicket.status]
+    if (target) setCustomerScreen(target)
+  }
+
+  const isDevMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('dev') === 'true'
 
   const isOnboarding = appSection === 'onboarding'
   const isCommon = appSection === 'common'
@@ -849,7 +930,17 @@ export default function App() {
         {isCommon ? (
           <>
             <StatusBar />
-            <CommonContent screen={commonScreen} setScreen={setCommonScreen} onGoHome={goFromCommon} />
+            <CommonContent screen={commonScreen} setScreen={setCommonScreen} onGoHome={goFromCommon}
+              onNotifDeepLink={(targetStatus) => {
+                if (targetStatus) {
+                  const screen = STATUS_TO_SCREEN[targetStatus]
+                  if (screen) {
+                    setAppSection('customer')
+                    setRole('customer')
+                    setCustomerScreen(screen)
+                  }
+                }
+              }} />
           </>
         ) : isOnboarding ? (
           <>
@@ -869,7 +960,7 @@ export default function App() {
           <>
             <Map mode={mapMode} />
             <StatusBar />
-            {!hideTopBar && <TopBar role={role} onSwitch={handleRoleSwitch} onNotif={() => goToCommon('notif-list')} />}
+            {!hideTopBar && <TopBar role={role} onSwitch={handleRoleSwitch} onNotif={() => { markNotificationsRead(); goToCommon('notif-list') }} hasUnreadNotif={rideNotifications.some(n => n.unread)} />}
 
             {/* Sheet */}
             <div className="absolute left-0 right-0 bg-white z-20"
@@ -881,64 +972,49 @@ export default function App() {
               </div>
               {role === 'customer' ? (
                 <div className="px-4 overflow-y-auto" style={{ height: 'calc(100% - 22px)', scrollbarWidth: 'none' }}>
-                  {customerScreen === 'idle' && <IdleContent onSearch={handleCustomerSearch} />}
+                  {customerScreen === 'idle' && <IdleContent onSearch={handleCustomerSearch} ticket={rideTicket} onUpcomingTap={handleUpcomingTap} />}
                   {customerScreen === 'searching' && (
-                    <SearchingContent onSelect={() => setCustomerScreen('ticket-form')} onBack={() => setCustomerScreen('idle')} />
+                    <SearchingContent onSelect={() => setCustomerScreen('ticket-form')} onBack={() => cancelRide()} />
                   )}
                   {customerScreen === 'ticket-form' && (
                     <TicketFormContent days={days} setDays={setDays}
                       repeatWeekly={repeatWeekly} setRepeatWeekly={setRepeatWeekly}
                       womenOnly={womenOnly} setWomenOnly={setWomenOnly}
                       isRaising={isRaisingTicket}
-                      onRaise={async () => {
+                      onRaise={() => {
                         setIsRaisingTicket(true)
-                        try {
-                          const selectedDays = Object.entries(days).filter(([, v]) => v).map(([k]) => k)
-                          const ticketId = await createTicket({
-                            customerId: user?.uid ?? 'demo-customer',
-                            customerName: user?.name ?? 'Demo User',
-                            pickupLat: DEFAULT_PICKUP.lat,
-                            pickupLng: DEFAULT_PICKUP.lng,
-                            pickupLabel: DEFAULT_PICKUP.label,
-                            dropLat: DEFAULT_DROP.lat,
-                            dropLng: DEFAULT_DROP.lng,
-                            dropLabel: DEFAULT_DROP.label,
-                            date: new Date().toISOString().split('T')[0],
-                            timeWindowStart: '08:00',
-                            timeWindowEnd: '08:30',
-                            days: selectedDays,
-                            repeatWeekly,
-                            womenOnly,
-                          })
-                          setActiveTicketId(ticketId)
-                          setCustomerScreen('waiting')
-                        } catch (err) {
-                          console.error('[App] Failed to create ticket:', err)
-                        } finally {
-                          setIsRaisingTicket(false)
-                        }
+                        const selectedDays = Object.entries(days).filter(([, v]) => v).map(([k]) => k)
+                        const distKm = 7.2 // mock distance between default pickup/drop
+                        createRideTicket({
+                          pickup: DEFAULT_PICKUP.label, drop: DEFAULT_DROP.label,
+                          pickupLat: DEFAULT_PICKUP.lat, pickupLng: DEFAULT_PICKUP.lng,
+                          dropLat: DEFAULT_DROP.lat, dropLng: DEFAULT_DROP.lng,
+                          date: new Date().toISOString().split('T')[0],
+                          time: '8:00 AM',
+                          isRecurring: repeatWeekly,
+                          recurringDays: selectedDays,
+                          distanceKm: distKm,
+                        })
+                        setIsRaisingTicket(false)
+                        // Auto-navigation effect handles transition to 'searching'
                       }}
-                      onBack={() => setCustomerScreen('searching')} />
+                      onBack={() => setCustomerScreen('idle')} />
                   )}
                   {customerScreen === 'waiting' && (
-                    <WaitingContent ticket={activeTicket}
-                      onCancel={async () => {
-                        if (activeTicketId) await cancelTicket(activeTicketId)
-                        setActiveTicketId(null)
-                        setActiveTicket(null)
-                        setCustomerScreen('idle')
-                      }}
-                      onRiderFound={() => setCustomerScreen('rider-accepted')} />
+                    <WaitingContent ticket={null}
+                      onCancel={() => { cancelRide(); setCustomerScreen('idle') }}
+                      onRiderFound={() => simulateRiderAccept()} />
                   )}
                   {customerScreen === 'rider-accepted' && (
-                    <RiderAcceptedContent onRideDay={() => setCustomerScreen('rider-arriving')} onCancel={() => setCustomerScreen('idle')} />
+                    <RiderAcceptedContent ticket={rideTicket} onRideDay={() => simulateRiderArrive()} onCancel={() => { cancelRide(); setCustomerScreen('idle') }} />
                   )}
                   {customerScreen === 'rider-arriving' && (
-                    <RiderArrivingContent onStartRide={() => setCustomerScreen('ride-in-progress')}
+                    <RiderArrivingContent ticket={rideTicket} onStartRide={() => startRide()}
                       onSOS={() => { setSosScreen('sos-confirm'); setShowSOS(true) }} />
                   )}
                   {customerScreen === 'ride-in-progress' && (
-                    <RideInProgressContent onEnd={() => setCustomerScreen('idle')}
+                    <RideInProgressContent ticket={rideTicket}
+                      onEnd={() => { completeRide(); setCustomerScreen('idle') }}
                       onSOS={() => { setSosScreen('sos-confirm'); setShowSOS(true) }} />
                   )}
                 </div>
@@ -983,38 +1059,40 @@ export default function App() {
           style={{ bottom: 8, width: 130, height: 4, background: 'rgba(16,24,40,0.22)' }} />
       </div>
 
-      {/* Demo screen picker — 4 dropdowns */}
-      <div className="flex items-center gap-1.5 flex-wrap justify-center" style={{ maxWidth: 520, width: '100%' }}>
-        {[
-          { label: 'Onboarding', active: isOnboarding, screens: ALL_ONBOARDING_SCREENS,
-            value: isOnboarding ? onboardingScreen : '',
-            onChange: (s: string) => { setAppSection('onboarding'); setOnboardingScreen(s as OnboardingScreen) } },
-          { label: 'Customer', active: appSection === 'customer', screens: allCustomerScreens,
-            value: appSection === 'customer' ? customerScreen : '',
-            onChange: (s: string) => { setAppSection('customer'); setRole('customer'); setCustomerScreen(s as CustomerScreen) } },
-          { label: 'Rider', active: appSection === 'rider', screens: allRiderScreens,
-            value: appSection === 'rider' ? riderScreen : '',
-            onChange: (s: string) => { setAppSection('rider'); setRole('rider'); setRiderScreen(s as RiderScreen) } },
-          { label: 'Common', active: isCommon, screens: ALL_COMMON_SCREENS,
-            value: isCommon ? commonScreen : '',
-            onChange: (s: string) => { goToCommon(s as CommonScreen) } },
-          { label: 'SOS', active: showSOS,
-            screens: ['sos-confirm','sos-holding','sos-active','sos-calling','sos-shared','sos-cancel-confirm','sos-ended'] as SOSScreen[],
-            value: showSOS ? sosScreen : '',
-            onChange: (s: string) => { setAppSection('customer'); setRole('customer'); setCustomerScreen('ride-in-progress'); setSosScreen(s as SOSScreen); setShowSOS(true) } },
-        ].map(d => (
-          <div key={d.label} className="flex flex-col gap-1" style={{ minWidth: 110, flex: 1 }}>
-            <label style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 2 }}>
-              {d.label}
-            </label>
-            <select value={d.value} onChange={e => d.onChange(e.target.value)} style={dropdownStyle(d.active)}>
-              {(d.screens as string[]).map(s => (
-                <option key={s} value={s} style={{ background: '#1c1c2e', color: 'white' }}>{s}</option>
-              ))}
-            </select>
-          </div>
-        ))}
-      </div>
+      {/* Demo screen picker — gated behind ?dev=true */}
+      {isDevMode && (
+        <div className="flex items-center gap-1.5 flex-wrap justify-center" style={{ maxWidth: 520, width: '100%' }}>
+          {[
+            { label: 'Onboarding', active: isOnboarding, screens: ALL_ONBOARDING_SCREENS,
+              value: isOnboarding ? onboardingScreen : '',
+              onChange: (s: string) => { setAppSection('onboarding'); setOnboardingScreen(s as OnboardingScreen) } },
+            { label: 'Customer', active: appSection === 'customer', screens: allCustomerScreens,
+              value: appSection === 'customer' ? customerScreen : '',
+              onChange: (s: string) => { setAppSection('customer'); setRole('customer'); setCustomerScreen(s as CustomerScreen) } },
+            { label: 'Rider', active: appSection === 'rider', screens: allRiderScreens,
+              value: appSection === 'rider' ? riderScreen : '',
+              onChange: (s: string) => { setAppSection('rider'); setRole('rider'); setRiderScreen(s as RiderScreen) } },
+            { label: 'Common', active: isCommon, screens: ALL_COMMON_SCREENS,
+              value: isCommon ? commonScreen : '',
+              onChange: (s: string) => { goToCommon(s as CommonScreen) } },
+            { label: 'SOS', active: showSOS,
+              screens: ['sos-confirm','sos-holding','sos-active','sos-calling','sos-shared','sos-cancel-confirm','sos-ended'] as SOSScreen[],
+              value: showSOS ? sosScreen : '',
+              onChange: (s: string) => { setAppSection('customer'); setRole('customer'); setCustomerScreen('ride-in-progress'); setSosScreen(s as SOSScreen); setShowSOS(true) } },
+          ].map(d => (
+            <div key={d.label} className="flex flex-col gap-1" style={{ minWidth: 110, flex: 1 }}>
+              <label style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 2 }}>
+                {d.label}
+              </label>
+              <select value={d.value} onChange={e => d.onChange(e.target.value)} style={dropdownStyle(d.active)}>
+                {(d.screens as string[]).map(s => (
+                  <option key={s} value={s} style={{ background: '#1c1c2e', color: 'white' }}>{s}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

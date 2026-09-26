@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
+import { RideProvider } from './context/RideContext'
 import './index.css'
 
 // PWA service worker is now handled by vite-plugin-pwa (virtual:pwa-register).
@@ -12,6 +13,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
+        <RideProvider>
         <Routes>
           {/* Main app shell — renders the existing prototype */}
           <Route path="/" element={<App />} />
@@ -22,6 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           {/* Phase 6+: /share/:token — public trip-share view (no auth required) */}
           <Route path="/share/:token" element={<App />} />
         </Routes>
+        </RideProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useRide, type RideNotification } from './context/RideContext'
 
 export type CommonScreen =
   | 'notif-list' | 'notif-empty' | 'notif-detail'
@@ -168,7 +169,18 @@ const NOTIFS = [
   { id: 5, icon: '🎉', title: "You're verified! Welcome to SaathChalo", desc: 'Your college ID has been confirmed. All features are now unlocked.', time: '2 days ago', unread: false, tab: 'alerts' },
 ]
 
-function NotifItem({ notif, onPress }: { notif: typeof NOTIFS[0]; onPress: () => void }) {
+interface NotifItemData {
+  id: number | string
+  icon: string
+  title: string
+  desc: string
+  time: string
+  unread: boolean
+  tab: string
+  targetStatus?: RideNotification['targetStatus']
+}
+
+function NotifItem({ notif, onPress }: { notif: NotifItemData; onPress: () => void }) {
   return (
     <button onClick={onPress} className="w-full flex items-start gap-3 px-4 py-3.5 text-left"
       style={{ background: notif.unread ? '#F5F8FF' : 'white', borderBottom: '1px solid #F2F4F7' }}>
@@ -190,10 +202,21 @@ function NotifItem({ notif, onPress }: { notif: typeof NOTIFS[0]; onPress: () =>
   )
 }
 
-function NotifList({ onBack, onDetail }: { onBack: () => void; onDetail: () => void }) {
+function NotifList({ onBack, onDetail, onDeepLink }: { onBack: () => void; onDetail: () => void; onDeepLink?: (targetStatus: RideNotification['targetStatus']) => void }) {
+  const { notifications: rideNotifs, clearNotifications } = useRide()
   const [tab, setTab] = useState(0)
   const tabs = ['All', 'Rides', 'Alerts']
-  const filtered = tab === 0 ? NOTIFS : tab === 1 ? NOTIFS.filter(n => n.tab === 'rides') : NOTIFS.filter(n => n.tab === 'alerts')
+
+  // Merge dynamic ride notifications with static demo notifications
+  const dynamicNotifs = rideNotifs.map(n => ({
+    id: n.id, icon: n.icon, title: n.title, desc: n.desc,
+    time: n.time, unread: n.unread, tab: 'rides' as const,
+    targetStatus: n.targetStatus,
+  }))
+  const staticNotifs = NOTIFS.map(n => ({ ...n, targetStatus: null as RideNotification['targetStatus'] }))
+  const allNotifs = [...dynamicNotifs, ...staticNotifs]
+  const filtered = tab === 0 ? allNotifs : tab === 1 ? allNotifs.filter(n => n.tab === 'rides') : allNotifs.filter(n => n.tab === 'alerts')
+
   return (
     <div className="flex flex-col h-full">
       <ScreenTopBar title="Notifications" onBack={onBack} />
@@ -201,8 +224,20 @@ function NotifList({ onBack, onDetail }: { onBack: () => void; onDetail: () => v
       <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
         {filtered.length === 0 ? (
           <EmptyStateView text="No notifications in this category yet." />
-        ) : filtered.map(n => <NotifItem key={n.id} notif={n} onPress={onDetail} />)}
+        ) : filtered.map(n => (
+          <NotifItem key={n.id} notif={n} onPress={() => {
+            if (n.targetStatus && onDeepLink) onDeepLink(n.targetStatus)
+            else onDetail()
+          }} />
+        ))}
       </div>
+      {rideNotifs.length > 0 && (
+        <button onClick={clearNotifications}
+          className="mx-4 mb-4 py-2.5 rounded-[10px] text-center"
+          style={{ fontSize: 12, fontWeight: 600, color: '#667085', border: '1px solid #E4E7EC' }}>
+          Clear ride notifications
+        </button>
+      )}
     </div>
   )
 }
@@ -773,11 +808,12 @@ function SafetyCenterScreen({ onBack, onEmergencyContact }: { onBack: () => void
 // ── Main export ──────────────────────────────────────────────────────────────
 
 export default function CommonContent({
-  screen, setScreen, onGoHome,
+  screen, setScreen, onGoHome, onNotifDeepLink,
 }: {
   screen: CommonScreen
   setScreen: (s: CommonScreen) => void
   onGoHome: () => void
+  onNotifDeepLink?: (targetStatus: RideNotification['targetStatus']) => void
 }) {
   // Track whether sub-screens were opened from profile or directly (e.g. via bottom nav)
   const [fromProfile, setFromProfile] = useState(false)
@@ -799,7 +835,7 @@ export default function CommonContent({
     <div className="absolute inset-0 bg-white flex flex-col overflow-hidden" style={{ borderRadius: '40px' }}>
       <div style={{ height: 44, flexShrink: 0 }} />
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {screen === 'notif-list'         && <NotifList onBack={onGoHome} onDetail={() => setScreen('notif-detail')} />}
+        {screen === 'notif-list'         && <NotifList onBack={onGoHome} onDetail={() => setScreen('notif-detail')} onDeepLink={onNotifDeepLink} />}
         {screen === 'notif-empty'        && <NotifEmpty onBack={onGoHome} />}
         {screen === 'notif-detail'       && <NotifDetail onBack={() => setScreen('notif-list')} />}
         {screen === 'profile'            && <ProfileScreen setScreen={goToFromProfile} onGoHome={onGoHome} />}
